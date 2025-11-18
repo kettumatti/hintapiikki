@@ -1,0 +1,116 @@
+import QtQuick 2.0
+import QtQuick.Controls 1.0 as QQC1
+import QtQuick.Controls 2.5 as QQC2
+import org.kde.kirigami 2.4 as Kirigami
+import org.kde.kquickcontrols 2.0 as KQControls
+
+Kirigami.FormLayout {
+    id: page
+
+    property alias cfg_priceMargin: priceMargin.value
+
+    property alias cfg_bgColor: bgColor.color
+    property alias cfg_bgOpacity: bgOpacity.opacity
+    property alias cfg_shadowColor: shadowColor.color
+    
+    property alias cfg_highColor: highColor.color
+    property alias cfg_mediumColor: mediumColor.color
+    property alias cfg_lowColor: lowColor.color
+
+    Component.onCompleted: {
+        if (!plasmoid.configuration.highColor)
+            plasmoid.configuration.highColor = "#ff0000" // red
+        if (!plasmoid.configuration.mediumColor)
+            plasmoid.configuration.mediumColor = "#add8e6" // lightblue
+        if (!plasmoid.configuration.lowColor)
+            plasmoid.configuration.lowColor = "#90ee90" // lightgreen
+    }
+
+    QQC1.SpinBox {
+        id: priceMargin
+        Kirigami.FormData.label: i18n("Marginaali (snt/kWh):")
+        decimals: 2
+        stepSize: 0.01
+    }
+
+
+    KQControls.ColorButton {
+        id: bgColor
+        Kirigami.FormData.label: i18n("Taustaväri:")
+        showAlphaChannel: false
+        Binding {
+            target: bgColor
+            property: "color"
+            value: plasmoid.configuration.bgColor
+        }
+    }
+
+        QQC1.SpinBox {
+        id: bgOpacity
+        from: 0
+        to: 1.0
+        Kirigami.FormData.label: i18n("Taustan läpinäkyvyys:")
+        decimals: 1
+        stepSize: 0.1
+        value: plasmoid.configuration.bgOpacity
+        
+
+    }
+
+    KQControls.ColorButton {
+        id: shadowColor
+        Kirigami.FormData.label: i18n("Tekstin varjon väri:")
+        showAlphaChannel: false
+        Binding {
+            target: shadowColor
+            property: "color"
+            value: plasmoid.configuration.shadowColor
+        }
+    }
+    
+    KQControls.ColorButton {
+        id: highColor
+        Kirigami.FormData.label: i18n("Kalliin hinnan väri")
+        showAlphaChannel: false
+        Binding {
+            target: highColor
+            property: "color"
+            value: plasmoid.configuration.highColor
+        }
+    }
+
+    KQControls.ColorButton {
+        id: mediumColor
+        Kirigami.FormData.label: i18n("Keskinkertaisen hinnan väri:")
+        showAlphaChannel: false
+        Binding {
+            target: mediumColor
+            property: "color"
+            value: plasmoid.configuration.mediumColor
+        }
+    }
+
+    KQControls.ColorButton {
+        id: lowColor
+        Kirigami.FormData.label: i18n("Halvan hinnan väri:")
+        showAlphaChannel: false
+        Binding {
+            target: lowColor
+            property: "color"
+            value: plasmoid.configuration.lowColor
+        }
+    }
+
+    QQC2.Button {
+        text: i18n("Palauta oletusvärit")
+        onClicked: {
+            plasmoid.configuration.highColor = "#ff0000"
+            plasmoid.configuration.mediumColor = "#add8e6"
+            plasmoid.configuration.lowColor = "#90ee90"
+            plasmoid.configuration.bgColor = "black"
+            plasmoid.configuration.bgOpacity = 0.5
+            plasmoid.configuration.shadowColor = "black"
+        }
+    }
+
+}

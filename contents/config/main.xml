@@ -1,0 +1,42 @@
+<!-- content/config/main.xml -->
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+                          http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
+  <kcfgfile name=""/>
+    <group name="General">
+        <entry name="priceMargin" type="Double">
+            <default>0.49</default>
+        </entry>
+        <entry name="headerColor" type="String">
+            <default>#eeeeee</default>
+        </entry>
+        <entry name="shadowColor" type="String">
+            <default>#000000</default>
+        </entry>
+        <entry name="highColor" type="String">
+            <default>#ff0000</default>
+        </entry>
+        <entry name="mediumColor" type="String">
+            <default>#00aaff</default>
+        </entry>
+        <entry name="lowColor" type="String">
+            <default>#90ee90</default>
+        </entry>
+        <entry name="bgColor" type="String">
+            <default>#000000</default>
+        </entry>
+        <entry name="bgOpacity" type="Double">
+            <default>0.5</default>
+        </entry>
+        <entry name="lowThreshold" type="Int">
+            <default>8</default>
+        </entry>
+        <entry name="highThreshold" type="Int">
+            <default>20</default>
+        </entry>
+    </group>
+</kcfg>
+
+

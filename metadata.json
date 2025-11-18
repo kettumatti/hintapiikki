@@ -1,0 +1,43 @@
+{
+  "KPackageStructure": "Plasma/Applet",
+  "KPlugin": {
+    "Id": "org.kde.plasma.spothinta",
+    "Name[fi]": "Spot-hinta",
+    "Description[fi]": "Näyttää sähkön spot-hinnan",
+    "Icon": "energy",
+    "PluginType": "Plasma/Applet",
+    "FrameworkVersion": 6,
+    "Authors": [
+      {
+        "Name": "Matti Kettunen"
+      }
+    ],
+    "Website": "https://example.com",
+    "Version": "1.0",
+    "License": "GPL",
+    "EnabledByDefault": true
+  },
+  "ServiceTypes": [ "Plasma/Applet" ],
+  
+  "X-Plasma-API-Minimum-Version": "6.0",
+  "X-Plasma-MainScript": "contents/ui/main.qml",
+
+  "X-Plasma-DisableShortcutsConfig": true,
+
+  "X-Plasma-HasConfigurationInterface": true,
+  "X-Plasma-ConfigUi": "contents/config/config.qml",
+
+  "X-Plasma-ConfigDefaults": {
+  "bgColor": "black",
+  "bgOpacity": 0.5,
+  "headerColor": "#eeeeee",
+  "shadowColor": "black",
+  "highColor": "#ff0000",
+  "mediumColor": "#00aaff",
+  "lowColor": "#90ee90",
+  "highThreshold": 20,
+  "lowThreshold": 8,
+  "priceMargin": 0.49
+  }
+
+}
