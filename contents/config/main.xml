@@ -10,25 +10,25 @@
             <default>0.49</default>
         </entry>
         <entry name="headerColor" type="String">
-            <default>#eeeeee</default>
+            <default>#FFD966</default>
         </entry>
         <entry name="shadowColor" type="String">
             <default>#000000</default>
         </entry>
         <entry name="highColor" type="String">
-            <default>#ff0000</default>
+            <default>#FF4C4C</default>
         </entry>
         <entry name="mediumColor" type="String">
-            <default>#00aaff</default>
+            <default>#4CA6FF</default>
         </entry>
         <entry name="lowColor" type="String">
-            <default>#90ee90</default>
+            <default>#7CFF4C</default>
         </entry>
         <entry name="bgColor" type="String">
-            <default>#000000</default>
+            <default>#1E1E1E</default>
         </entry>
         <entry name="bgOpacity" type="Double">
-            <default>0.5</default>
+            <default>1</default>
         </entry>
         <entry name="lowThreshold" type="Int">
             <default>8</default>

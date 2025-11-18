@@ -14,8 +14,8 @@ PlasmoidItem {
 
     Rectangle {
         anchors.fill: parent
-        color: plasmoid.configuration.bgColor ?? "black"
-        opacity: plasmoid.configuration.bgOpacity ?? 0.5
+        color: plasmoid.configuration.bgColor ?? "#1E1E1E"
+        opacity: plasmoid.configuration.bgOpacity ?? 1.0
     }
 
     Timer {
@@ -30,26 +30,28 @@ PlasmoidItem {
             restart();
         }
     }
- /*
-    Timer {
-        interval: getNextUpdateInterval(); running: true; repeat: true
-        onTriggered: loadPrice()
-    }
+    /*
+     *    Timer {
+     *        interval: getNextUpdateInterval(); running: true; repeat: true
+     *        onTriggered: loadPrice()
+}
 */
 
-    
+
     Column {
         anchors.centerIn: parent
         spacing: 4
 
         Text {
-            text: "Pörssisähkön hinta"
+            text: "Sähkön hinta"
             font.family: "Helvetica"
             font.bold: false
             font.pixelSize: root.height * 0.2
-            color: plasmoid.configuration.headerColor ?? "#eeeeee"
+            color: plasmoid.configuration.headerColor ?? "#FFD966"
+            horizontalAlignment: Text.AlignHCenter
+            anchors.horizontalCenter: parent.horizontalCenter
         }
-        
+
         Row {
             spacing: 5
 
@@ -90,12 +92,12 @@ PlasmoidItem {
         let lowThreshold = plasmoid.configuration.lowThreshold ?? 8;
         let highThreshold = plasmoid.configuration.highThreshold ?? 20;
 
-        if (price < lowThreshold) return plasmoid.configuration.lowColor ?? "#90ee90";
-        else if (price < highThreshold) return plasmoid.configuration.mediumColor ?? "#00aaff";
-        else return plasmoid.configuration.highColor ?? "#ff0000";
+        if (price < lowThreshold - 1) return plasmoid.configuration.lowColor ?? "#7CFF4C";
+        else if (price < highThreshold - 1) return plasmoid.configuration.mediumColor ?? "#4CA6FF";
+        else return plasmoid.configuration.highColor ?? "#FF4C4C";
     }
 
-    
+
     function loadPrice() {
         console.log("Yritetään hakea hintatietoja...");
 
@@ -125,8 +127,8 @@ PlasmoidItem {
                             var nextResponse = JSON.parse(xhrNext.responseText);
                             var nextVal = parseFloat(nextResponse.price);
                             priceTrend = !isNaN(nextVal)
-                                ? (nextVal > price ? "▲" : nextVal < price ? "▼" : " -")
-                                : " -";
+                            ? (nextVal > price ? "▲" : nextVal < price ? "▼" : " -")
+                            : " -";
                         } else {
                             priceTrend = " -";
                         }
@@ -160,7 +162,7 @@ PlasmoidItem {
             "RetryTimer"
         );
     }
-    
+
     Component.onCompleted: {
         hourlyTimer.interval = getNextUpdateInterval();
         hourlyTimer.start();

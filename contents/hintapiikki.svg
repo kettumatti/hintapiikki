@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+    <title>Sähkön hintaseuranta – salama + trendikäyrä</title>
+    <defs>
+        <!-- Sähäkkä sininen gradientti taustasymbolille -->
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#0EA5E9"/>
+            <stop offset="100%" stop-color="#2B62d6"/>
+        </linearGradient>
+    </defs>
+
+    <!-- Symboli: pyöristetty neliö, sisällä trendikäyrä ja salama -->
+    <g transform="translate(24,16)">
+        <rect x="0" y="0" width="88" height="88" rx="20" fill="url(#bg)"/>
+
+        <!-- Hinnan trendikäyrä (vaihtelut) -->
+        <path d="M12 60
+              C22 52, 28 40, 36 44
+              C44 48, 48 62, 56 58
+              C64 54, 72 38, 76 32"
+              fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" transform="translate(0,5)"/>
+
+        <!-- Sähkösalamasymboli -->
+        <path d="M52 14 L38 44 H54 L42 74 L74 40 H58 L70 14 Z"
+              fill="#fafa00" transform="translate(-5,0)"/>
+        </g>
+</svg>
