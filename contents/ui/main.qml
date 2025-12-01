@@ -2,6 +2,8 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import org.kde.plasma.plasmoid 2.0
 
+// import "." as Components
+
 PlasmoidItem {
     id: root
     width: 300
@@ -11,6 +13,11 @@ PlasmoidItem {
     property real price: -100
     property real margin: plasmoid.configuration.priceMargin ?? 0.49
     property string priceTrend: "-"
+    property var allPrices: []
+    property var quarterlyPrices: []
+    property var hourlyPrices: []
+    property int currentHour: new Date().getHours()
+
 
     Rectangle {
         anchors.fill: parent
@@ -30,13 +37,12 @@ PlasmoidItem {
             restart();
         }
     }
-    /*
-     *    Timer {
-     *        interval: getNextUpdateInterval(); running: true; repeat: true
-     *        onTriggered: loadPrice()
-}
-*/
-
+    
+    Timer {
+        id: dailyTimer
+        repeat: true
+        onTriggered: fetchPrices()
+    }
 
     Column {
         anchors.centerIn: parent
@@ -86,6 +92,12 @@ PlasmoidItem {
         var now = new Date();
         var nextHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1, 0, 5);
         return nextHour.getTime() - now.getTime();
+    }
+    
+    function getNextMidnightInterval() {
+        var now = new Date()
+        var nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 10)
+        return nextMidnight.getTime() - now.getTime()
     }
 
     function getColor(price) {
@@ -147,6 +159,168 @@ PlasmoidItem {
         };
         xhrCurrent.send();
     }
+    
+    function fetchPrices() {
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "https://api.porssisahko.net/v2/latest-prices.json")
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                try {
+                    var response = JSON.parse(xhr.responseText)
+                    allPrices = response.prices
+
+                    const todayDateStr = new Date().toLocaleDateString("sv-SE")
+
+                    quarterlyPrices = allPrices
+                        .filter(item => new Date(item.startDate).toLocaleDateString("sv-SE") === todayDateStr)
+                        .map(item => {
+                            const localDate = new Date(item.startDate)
+                            return {
+                                hour: localDate.getHours().toString().padStart(2, "0"),
+                                minute: localDate.getMinutes().toString().padStart(2, "0"),
+                                price: item.price
+                            }
+                        })
+
+                    const hourlyMap = {}
+                    quarterlyPrices.forEach(q => {
+                        if (!hourlyMap[q.hour]) hourlyMap[q.hour] = []
+                        hourlyMap[q.hour].push(q.price)
+                    })
+
+                    hourlyPrices = Object.keys(hourlyMap).map(hour => {
+                        const prices = hourlyMap[hour]
+                        if (prices.length === 4) {
+                            const avg = prices.reduce((a, b) => a + b, 0) / prices.length
+                            return { hour, price: avg }
+                        } else {
+                            console.warn("⚠️ Tunnilta puuttuu vartteja:", hour)
+                            return { hour, price: null }
+                        }
+                    }).sort((a, b) => parseInt(a.hour) - parseInt(b.hour))
+
+                    // console.log("All: ", allPrices)
+
+                } catch (e) {
+                    console.log("JSON-virhe:", e)
+                    hourlyPrices = []
+                }
+            }
+        }
+        xhr.send()
+    }
+
+    
+    
+    
+    Popup {
+        id: pricePopup
+        width: 220
+        height: 250
+        modal: true
+        focus: true
+
+        onOpened: {
+            let idx = findCurrentHourIndex()
+            if (idx >= 0) {
+                hourlyList.positionViewAtIndex(idx, ListView.Center)
+            }
+        }
+        
+        background: Rectangle {
+            color: "#222"
+            radius: 8
+            border.color: root.plasmoid ? root.plasmoid.configuration.headerColor ?? "#FFD966" : "#FFD966"
+            opacity: root.plasmoid ? root.plasmoid.configuration.bgOpacity ?? 0.95 : 0.95
+
+        }
+        
+        Column { 
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 8
+            
+            Text {
+                text: "Tuntihinnat"
+                font.pixelSize: 20
+                font.bold: true
+                color: root.plasmoid.configuration.headerColor ?? "#FFD966"
+                horizontalAlignment: Text.AlignHCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+            
+            ListView {
+                id: hourlyList
+                width: parent.width
+                height: parent.height - 40 
+                clip: true
+                model: root.hourlyPrices
+                delegate: Row {
+                    //anchors.horizontalCenter: parent.horizontalCenter
+                    spacing: 10
+                    
+                    property bool isCurrent: Number(modelData.hour) === currentHour
+                    
+                    Text { 
+                        text: modelData.hour + ":00"
+                        color: isCurrent ? "yellow" : "white"
+                        font.bold: isCurrent
+                        font.pixelSize: 16
+                        
+                        SequentialAnimation on color {
+                            running: isCurrent
+                            loops: Animation.Infinite
+                            ColorAnimation { from: "yellow"; to: "red"; duration: 500 }
+                            ColorAnimation { from: "red"; to: "yellow"; duration: 500 }
+                        }
+                    }
+                    Text { 
+                        text: modelData.price !== null 
+                            ? (Number(modelData.price) + margin).toFixed(2) + " snt/kWh"
+                            : "puuttuu"
+                        font.pixelSize: 16
+                        font.bold: isCurrent
+                        color: modelData.price !== null
+                            ? getColor(modelData.price)
+                            : "gray"
+                    }
+                }
+            }
+        }
+        
+        function findCurrentHourIndex() {
+            let nowHour = new Date().getHours().toString().padStart(2, "0")
+            for (let i = 0; i < hourlyPrices.length; i++) {
+                if (hourlyPrices[i].hour === nowHour) {
+                    return i
+                }
+            }
+            return -1
+        }
+        
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+            cursorShape: Qt.PointingHandCursor
+            hoverEnabled: true
+
+            onClicked: pricePopup.close()
+            onEntered: closeTimer.stop()
+            onExited: closeTimer.start()
+        }
+        
+        Timer {
+            id: closeTimer
+            interval: 3000  // 1 sekunti
+            repeat: false
+            onTriggered: pricePopup.close()
+        }
+        
+    }
+    
+    
+
+    
 
     // Tämä funktio asettaa uuden 30 sekunnin ajastimen jos haku epäonnistui
     function retrySoon() {
@@ -162,11 +336,25 @@ PlasmoidItem {
             "RetryTimer"
         );
     }
+    
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton | Qt.MiddleButton
+        cursorShape: Qt.PointingHandCursor
+        hoverEnabled: true
+
+        onClicked: function(mouse) {
+            pricePopup.open()
+        }
+    }
 
     Component.onCompleted: {
         hourlyTimer.interval = getNextUpdateInterval();
         hourlyTimer.start();
+        dailyTimer.interval = getNextMidnightInterval()
+        dailyTimer.start()
         console.log("Plasmoid valmis");
         loadPrice();
+        fetchPrices();
     }
 }
