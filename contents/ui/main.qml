@@ -3,8 +3,6 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import org.kde.plasma.plasmoid 2.0
 
-// import "." as Components
-
 PlasmoidItem {
     id: root
     width: 300
@@ -32,7 +30,7 @@ PlasmoidItem {
 
     Timer {
         id: timeUpdater
-        interval: 1000 * 30 // tarkistaa puolen minuutin välein; riittää päivitykseen
+        interval: 1000 * 10 // 10 sekunnin välein; riittää päivitykseen
         running: true
         repeat: true
         onTriggered: {
@@ -64,7 +62,7 @@ PlasmoidItem {
     }
 
     /////////////////////
-
+    /// PÄÄNÄKYMÄ ///////
 
     Rectangle {
         anchors.fill: parent
@@ -249,18 +247,18 @@ PlasmoidItem {
         root.sortedQuarterlyPrices = arr;
     }
 
-    
+    /////////////////////////////////////////
     ///////////////// POPUP /////////////////
     
     Popup {
         id: pricePopup
-        width: 420
+        width: 450
         height: 250
         modal: true
         focus: true
-        
+        z: 1
         // vain ulkopuolella klikkaus sulkee
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+        // closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
         onOpened: {
             let idx = findCurrentIndex()
@@ -268,47 +266,64 @@ PlasmoidItem {
                 hourlyList.positionViewAtIndex(idx, ListView.Center)
             }
         }
+        
+        MouseArea {
+            anchors.fill: parent
+            z: 1
+            propagateComposedEvents: true
+            preventStealing: true
+            acceptedButtons: Qt.LeftButton
+            cursorShape: Qt.PointingHandCursor
+            hoverEnabled: true
 
-        /*Connections {
-            target: root.plasmoid.configuration
-            onShowQuarterlyChanged: {
-                // Anna ListView:lle hetki aikaa päivittyä ennen scrollausta
-                Qt.callLater(function() {
-                    let idx = findCurrentIndex()
-                    if (idx >= 0) {
-                        hourlyList.positionViewAtIndex(idx, ListView.Center)
-                    }
-                })
+            onClicked: {
+                if (!timeSwitch.containsMouse) {
+                    pricePopup.close()
+                }
             }
-        }*/
+            onPressed: {
+                if (timeSwitch.containsMouse) {
+                    mouse.accepted = false   // anna tapahtuma Switchille
+                }
+            }
+            onEntered: closeTimer.stop()
+            onExited: closeTimer.start()
+        }
+        
+        Timer {
+            id: closeTimer
+            interval: 3000  // 1 sekunti
+            repeat: false
+            onTriggered: pricePopup.close()
+        }
         
         background: Rectangle {
             color: "#222"
             radius: 8
             border.color: root.plasmoid ? root.plasmoid.configuration.headerColor ?? "#FFD966" : "#FFD966"
             opacity: root.plasmoid ? root.plasmoid.configuration.bgOpacity ?? 0.95 : 0.95
-
+            
+            
         }
         
         ColumnLayout { 
             anchors.fill: parent
-            // anchors.margins: 12
             spacing: 8
-
+            z: 2
             RowLayout {
                 //anchors.fill: parent
                 Layout.fillWidth: true
                 spacing: 8
 
                 Text {
-                    text: "Hinnat" // root.plasmoid.configuration.showQuarterly ? "Varttihinnat" : "Tuntihinnat"
+                    text: "Sähkön hinta tänään"
                     font.pixelSize: 20
                     font.bold: true
                     color: root.plasmoid.configuration.headerColor ?? "#FFD966"
                     Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
                 }
 
-                Item { Layout.fillWidth: true } // venyttää väliä
+                Item { Layout.fillWidth: true }
 
                 Text {
                     text: "1h"
@@ -317,24 +332,46 @@ PlasmoidItem {
                     Layout.alignment: Qt.AlignVCenter
                 }
 
+                
                 Switch {
+                    id: timeSwitch
                     checked: root.plasmoid.configuration.showQuarterly || false
-                    // Layout.preferredWidth: 60
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+
+                    // korvataan oletus-indikaattori
+                    indicator: Rectangle {
+                        id: track
+                        width: 60
+                        height: 24
+                        radius: height/2
+                        color: "#888"
+
+                        Rectangle {
+                            id: thumb
+                            width: 20
+                            height: 20
+                            radius: 10
+                            y: 2
+                            x: timeSwitch.checked ? track.width - width - 2 : 2
+                            color: "#FFD966"
+
+                            Behavior on x {
+                                NumberAnimation { duration: 200; easing.type: Easing.InOutQuad }
+                            }
+                        }
+                    }
+
                     onToggled: {
+                        closeTimer.stop()
                         root.plasmoid.configuration.showQuarterly = checked
-                        // Odota että modele päivittyy
                         Qt.callLater(function() {
                             let idx = pricePopup.findCurrentIndex()
                             if (idx >= 0) {
                                 hourlyList.positionViewAtIndex(idx, ListView.Center)
                             }
-
-                        priceGraph.requestPaint()
-
+                            priceGraph.requestPaint()
                         })
                     }
-                    // text: "15min"
-                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                 }
 
                 Text {
@@ -348,17 +385,17 @@ PlasmoidItem {
             }
 
             RowLayout {
+                z: -100
             
                 ListView {
                     id: hourlyList
-                    // width: parent.width
-                    // height: parent.height - 40
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
+                    z: 0
                     model: (root.plasmoid.configuration.showQuarterly ? root.sortedQuarterlyPrices : root.hourlyPrices)
                     delegate: Row {
-                        //anchors.horizontalCenter: parent.horizontalCenter
+ 
                         spacing: 10
 
                         // Helpot muuttujat
@@ -398,83 +435,92 @@ PlasmoidItem {
                                 ? getColor(modelData.price)
                                 : "gray"
                         }
+                    } // Row
+                    
+                    ScrollBar.vertical: ScrollBar {
+                        policy: ScrollBar.AsNeeded   // vaihtoehdot: AlwaysOn, AlwaysOff, AsNeeded
+                        interactive: false            // käyttäjä voi vetää palkkia
                     }
-                }
+                    
+                    MouseArea {
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            pricePopup.close()
+                        }
+                    }
+                    
+                } // ListView 
 
                 // Oikealla graafi
+                
                 Canvas {
                     id: priceGraph
-                    width: 220
+                    width: 220  // voit vaihtaa tarpeen mukaan
                     Layout.fillHeight: true
-                    anchors.verticalCenter: parent.verticalCenter
 
                     onPaint: {
                         var ctx = getContext("2d")
                         ctx.clearRect(0, 0, width, height)
 
-                        var prices = root.plasmoid.configuration.showQuarterly ? root.quarterlyPrices : root.hourlyPrices
+                        // valitaan oikea data: tunti vai vartti
+                        var prices = root.plasmoid.configuration.showQuarterly ? root.sortedQuarterlyPrices : root.hourlyPrices
                         if (prices.length === 0) return
 
-                            // laske min/max hintatasot
-                            var minPrice = Math.min(...prices.map(p => p.price || 0))
-                            var maxPrice = Math.max(...prices.map(p => p.price || 0))
-                            if (minPrice === maxPrice) maxPrice += 1  // välttää nolladivision
+                        // laske min ja max hintatasot
+                        var minPrice = Math.min(...prices.map(p => p.price || 0))
+                        var maxPrice = Math.max(...prices.map(p => p.price || 0))
+                        if (minPrice === maxPrice) maxPrice += 1  // välttää nolladivision
 
-                                var barWidth = width / prices.length
+                        var barCount = prices.length
+                        var barWidth = width / barCount
 
-                                for (var i = 0; i < prices.length; i++) {
-                                    var p = prices[i].price || 0
-                                    var barHeight = ((p - minPrice) / (maxPrice - minPrice)) * height
-                                    var x = i * barWidth
-                                    var y = height - barHeight
+                        var now = new Date()
+                        var currentHour = now.getHours()
+                        var currentMinute = now.getMinutes()
+                        var currentQuarter = Math.floor(currentMinute / 15) * 15
 
-                                    // väri hintatason mukaan
-                                    if (p < (plasmoid.configuration.lowThreshold ?? 8)) ctx.fillStyle = "#7CFF4C"
-                                        else if (p < (plasmoid.configuration.highThreshold ?? 20)) ctx.fillStyle = "#4CA6FF"
-                                            else ctx.fillStyle = "#FF4C4C"
+                        for (var i = 0; i < barCount; i++) {
+                            var item = prices[i]
+                            var p = item.price || 0
+                            var barHeight = ((p - minPrice) / (maxPrice - minPrice)) * height
+                            var x = i * barWidth
+                            var y = height - barHeight
 
-                                                ctx.fillRect(x, y, barWidth*0.8, barHeight)
-                                }
-                    }
-                }
+                            // tarkista, onko kyseessä nykyinen pylväs
+                            var isCurrent = root.plasmoid.configuration.showQuarterly
+                                ? (Number(item.hour) === currentHour && Number(item.minute) === currentQuarter)
+                                : (Number(item.hour) === currentHour)
 
-/*                Canvas {
-                    id: priceGraph
-                    width: 100
-                    Layout.fillHeight: true
-                    anchors.verticalCenter: parent.verticalCenter
+                            // väri hintatason mukaan
+                            if (p < (root.plasmoid.configuration.lowThreshold ?? 8)) ctx.fillStyle = "#7CFF4C"
+                            else if (p < (root.plasmoid.configuration.highThreshold ?? 20)) ctx.fillStyle = "#4CA6FF"
+                            else ctx.fillStyle = "#FF4C4C"
 
-                    onPaint: {
-                        var ctx = getContext("2d")
-                        ctx.clearRect(0, 0, width, height)
-
-                        if (root.hourlyPrices.length === 0)
-                            return
-
-                            // Laske min/max
-                            var prices = root.plasmoid.configuration.showQuarterly ? root.quarterlyPrices : root.hourlyPrices
-                            var minPrice = Math.min(...prices.map(p => p.price || 0))
-                            var maxPrice = Math.max(...prices.map(p => p.price || 0))
-
-                            var stepX = width / (prices.length - 1)
-                            ctx.beginPath()
-                            for (var i = 0; i < prices.length; i++) {
-                                var p = prices[i].price || 0
-                                var x = i * stepX
-                                var y = height - ((p - minPrice) / (maxPrice - minPrice)) * height
-                                if (i === 0)
-                                    ctx.moveTo(x, y)
-                                    else
-                                        ctx.lineTo(x, y)
+                            // jos nykyinen, hehkuu valkoisena
+                            if (isCurrent) {
+                                ctx.fillStyle = "#FFFFFF"
+                                
+                                ctx.beginPath()
+                                var triangleX = x + barWidth*0.4
+                                var triangleY = y - 6
+                                var size = 6
+                                // Piirretään kärjellään oleva kolmio
+                                ctx.moveTo(triangleX, triangleY + size)   // kärki alaspäin
+                                ctx.lineTo(triangleX - size/2, triangleY) // vasen kulma
+                                ctx.lineTo(triangleX + size/2, triangleY) // oikea kulma
+                                ctx.closePath()
+                                ctx.fill()
                             }
-                            ctx.strokeStyle = "#FFD966"
-                            ctx.lineWidth = 2
-                            ctx.stroke()
+
+                            ctx.fillRect(x, y, barWidth * 0.8, barHeight) // jätetään pieni rako
                         }
-                    } // Canvas
-*/
+                    }
+                } //Canvas
+
             } // RowLayout
-        }
+        } // ColumnLayout
 
         
         function findCurrentIndex() {
@@ -509,28 +555,11 @@ PlasmoidItem {
                 }
             }
 
-            return -1
+                return -1
         }
 
-        /* MouseArea {
-            anchors.fill: parent
-            acceptedButtons: Qt.LeftButton | Qt.MiddleButton
-            cursorShape: Qt.PointingHandCursor
-            hoverEnabled: true
-
-            // onClicked: pricePopup.close()
-            onEntered: closeTimer.stop()
-            onExited: closeTimer.start()
-        }*/
         
-        Timer {
-            id: closeTimer
-            interval: 3000  // 1 sekunti
-            repeat: false
-            onTriggered: pricePopup.close()
-        }
-        
-    }
+    } // Popup
     
     
 
