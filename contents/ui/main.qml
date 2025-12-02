@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
 import org.kde.plasma.plasmoid 2.0
 
 // import "." as Components
@@ -219,6 +220,9 @@ PlasmoidItem {
         height: 250
         modal: true
         focus: true
+        
+        // vain ulkopuolella klikkaus sulkee
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
         onOpened: {
             let idx = findCurrentHourIndex()
@@ -235,26 +239,63 @@ PlasmoidItem {
 
         }
         
-        Column { 
+        ColumnLayout { 
             anchors.fill: parent
-            anchors.margins: 12
+            // anchors.margins: 12
             spacing: 8
-            
-            Text {
-                text: "Tuntihinnat"
-                font.pixelSize: 20
-                font.bold: true
-                color: root.plasmoid.configuration.headerColor ?? "#FFD966"
-                horizontalAlignment: Text.AlignHCenter
-                anchors.horizontalCenter: parent.horizontalCenter
+
+            RowLayout {
+                //anchors.fill: parent
+                Layout.fillWidth: true
+                spacing: 8
+
+                Text {
+                    text: "Hinnat" // root.plasmoid.configuration.showQuarterly ? "Varttihinnat" : "Tuntihinnat"
+                    font.pixelSize: 20
+                    font.bold: true
+                    color: root.plasmoid.configuration.headerColor ?? "#FFD966"
+                    Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
+                }
+
+                Item { Layout.fillWidth: true } // venyttää väliä
+
+                Label { text: "1h"; verticalAlignment: Label.AlignVCenter }
+                Switch {
+                    checked: root.plasmoid.configuration.showQuarterly || false
+                    onToggled: root.plasmoid.configuration.showQuarterly = checked
+                    text: "15min"
+                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                }
+                
             }
+            /*Row {
+                Text {
+                    text: root.plasmoid.configuration.showQuarterly ? "Varttihinnat" : "Tuntihinnat"
+                    font.pixelSize: 20
+                    font.bold: true
+                    color: root.plasmoid.configuration.headerColor ?? "#FFD966"
+                    horizontalAlignment: Text.AlignHLeft
+                    //anchors.horizontalCenter: parent.horizontalCenter
+                }
+                
+                Switch {
+                    checked: root.plasmoid.configuration.showQuarterly || false
+                    //text: checked ? "Vartit" : "Tunnit"
+                    horizontalAlignment: Text.AlignHRight
+                    onToggled: {
+                        root.plasmoid.configuration.showQuarterly = checked
+                    }
+                }
+            }*/
             
             ListView {
                 id: hourlyList
-                width: parent.width
-                height: parent.height - 40 
+                // width: parent.width
+                // height: parent.height - 40 
+                Layout.fillWidth: true
+                Layout.fillHeight: true
                 clip: true
-                model: root.hourlyPrices
+                model: (root.plasmoid.configuration.showQuarterly ? root.quarterlyPrices : root.hourlyPrices)
                 delegate: Row {
                     //anchors.horizontalCenter: parent.horizontalCenter
                     spacing: 10
@@ -298,16 +339,16 @@ PlasmoidItem {
             return -1
         }
         
-        MouseArea {
+        /* MouseArea {
             anchors.fill: parent
             acceptedButtons: Qt.LeftButton | Qt.MiddleButton
             cursorShape: Qt.PointingHandCursor
             hoverEnabled: true
 
-            onClicked: pricePopup.close()
+            // onClicked: pricePopup.close()
             onEntered: closeTimer.stop()
             onExited: closeTimer.start()
-        }
+        }*/
         
         Timer {
             id: closeTimer
