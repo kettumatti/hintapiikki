@@ -459,7 +459,7 @@ PlasmoidItem {
                     id: priceGraph
                     width: 220  // voit vaihtaa tarpeen mukaan
                     Layout.fillHeight: true
-
+                    
                     onPaint: {
                         var ctx = getContext("2d")
                         ctx.clearRect(0, 0, width, height)
@@ -471,6 +471,7 @@ PlasmoidItem {
                         // laske min ja max hintatasot
                         var minPrice = Math.min(...prices.map(p => p.price || 0))
                         var maxPrice = Math.max(...prices.map(p => p.price || 0))
+                        
                         if (minPrice === maxPrice) maxPrice += 1  // välttää nolladivision
 
                         var barCount = prices.length
@@ -484,7 +485,7 @@ PlasmoidItem {
                         for (var i = 0; i < barCount; i++) {
                             var item = prices[i]
                             var p = item.price || 0
-                            var barHeight = ((p - minPrice) / (maxPrice - minPrice)) * height
+                            var barHeight = 5 + ((p - minPrice) / (maxPrice - minPrice)) * height
                             var x = i * barWidth
                             var y = height - barHeight
 
@@ -514,9 +515,11 @@ PlasmoidItem {
                                 ctx.fill()
                             }
 
+
                             ctx.fillRect(x, y, barWidth * 0.8, barHeight) // jätetään pieni rako
+                            
                         }
-                    }
+                    }  // onPaint
                 } //Canvas
 
             } // RowLayout
