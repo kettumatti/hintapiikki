@@ -28,9 +28,9 @@ PlasmoidItem {
     onHourlyPricesChanged: priceGraph.requestPaint()
 
     
-    //////////////////////////
-    //////// TIMERIT /////////
-    //////////////////////////
+    //////////////////////////////////////////////////////////
+    ////////////////////////// TIMERIT ///////////////////////
+    //////////////////////////////////////////////////////////
     
     Timer {
         id: wakeChecker
@@ -81,11 +81,7 @@ PlasmoidItem {
         interval: 30 * 1000
         repeat: false
         running: false
-
-        onTriggered: {
-            loadPrice()
-            fetchPrices()
-        }
+        onTriggered: fetchPrices()
     }
     
     Timer {
@@ -97,15 +93,15 @@ PlasmoidItem {
     
     Timer {
         id: closeTimer
-        interval: 3000  // 1 sekunti
+        interval: 3000  // 3 sekuntia
         repeat: false
         onTriggered: popupClose()
     }
 
     
-    ///////////////////////////////
-    ////////// FUNKTIOT ///////////
-    ///////////////////////////////
+    ////////////////////////////////////////////////////////////
+    ///////////////////////// FUNKTIOT /////////////////////////
+    ////////////////////////////////////////////////////////////
     
     function popupClose() {
         pricePopup.close()
@@ -119,7 +115,6 @@ PlasmoidItem {
         popupIsOpen = true
     }
     
-    // Tämä funktio asettaa uuden 30 sekunnin ajastimen jos haku epäonnistui
     function retrySoon() {
         console.log("Verkkovirhe tai timeout – yritetään uudelleen 30 sekunnin päästä");
         retryTimer.restart()
@@ -210,7 +205,7 @@ PlasmoidItem {
         xhr.open("GET", "https://api.porssisahko.net/v2/latest-prices.json")
         xhr.onreadystatechange = function() {
             if (xhr.readyState === XMLHttpRequest.DONE) {
-                // 1) Tarkista HTTP-status
+                // Tarkista HTTP-status
                 if (xhr.status !== 200) {
                     console.warn("fetchPrices: HTTP virhe:", xhr.status)
                     retrySoon()
@@ -222,7 +217,7 @@ PlasmoidItem {
                     
                     // Uusien tietojen validointi
                     if (!response.prices || !Array.isArray(response.prices)) {
-                        console.warn("❌ fetchPrices: Datamuoto virheellinen")
+                        console.warn("fetchPrices: Datamuoto virheellinen")
                         retrySoon()
                         return
                     }
@@ -254,7 +249,7 @@ PlasmoidItem {
                             const avg = prices.reduce((a, b) => a + b, 0) / prices.length
                             return { hour, price: avg }
                         } else {
-                            console.warn("⚠️ Tunnilta puuttuu vartteja:", hour)
+                            console.warn("Tunnilta puuttuu vartteja:", hour)
                             return { hour, price: null }
                         }
                     }).sort((a, b) => parseInt(a.hour) - parseInt(b.hour))
@@ -320,9 +315,9 @@ PlasmoidItem {
     }
 
     
-    ///////////////////////////
-    /////// PÄÄNÄKYMÄ /////////
-    ///////////////////////////
+    /////////////////////////////////////////////////////////////////////////////
+    ///////////////////////////////// PÄÄNÄKYMÄ /////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////
 
     Rectangle {
         anchors.fill: parent
@@ -374,9 +369,9 @@ PlasmoidItem {
     }
 
 
-    /////////////////////////////////////////
-    ///////////////// POPUP /////////////////
-    /////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+    ////////////////////////////////// POPUP //////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
     
     Popup {
         id: pricePopup
@@ -538,8 +533,6 @@ PlasmoidItem {
                         property bool isCurrent: root.plasmoid.configuration.showQuarterly
                         ? (itemHour === currentHour && itemMinute === currentMinute)
                         : (itemHour === currentHour)
-
-                        //property bool isCurrent: Number(modelData.hour) === currentHour
 
                         Text {
                             text: root.plasmoid.configuration.showQuarterly
