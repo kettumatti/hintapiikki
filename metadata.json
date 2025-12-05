@@ -11,7 +11,7 @@
         "Name": "Matti Kettunen"
       }
     ],
-    "Version": "0.9.0",
+    "Version": "0.9.9",
     "License": "GPL",
     "Category": "Utilities",
     "Website": "https://github.com/kettumatti/hintapiikki",
@@ -21,6 +21,10 @@
 
   "X-Plasma-API-Minimum-Version": "6.0",
   "X-Plasma-MainScript": "contents/ui/main.qml",
+  
+    "KConfigXT": {
+    "file": "config/main.xml"
+  },
 
   "ConfigModel": [
     {
