@@ -27,8 +27,9 @@ PlasmoidItem {
     onHourlyPricesChanged: priceGraph.requestPaint()
 
     
-    ///////////////////////
-    ///// TIMERIT /////////
+    //////////////////////////
+    //////// TIMERIT /////////
+    //////////////////////////
     
     Timer {
         id: wakeChecker
@@ -45,8 +46,7 @@ PlasmoidItem {
             // Jos aika hyppäsi yli 5 minuuttia,
             // kone on todennäköisesti herännyt horroksesta
             if (diff > 5 * 60 * 1000) {
-                console.log("Detected wake from sleep (time jump). Reloading...")
-                loadPrice()
+                console.log("Kone herännyt horroksesta? Päiviteään hinnat...")
                 fetchPrices()
             }
 
@@ -69,27 +69,24 @@ PlasmoidItem {
     }
 
     Timer {
-        id: hourlyTimer
-        interval: 1000 // alustavasti 1s, korvataan heti
+        id: refreshTimer
+        interval: 10000
         running: true
-        repeat: false
-        onTriggered: {
-            loadPrice();
-            // Aseta uusi ajastin seuraavaan täyteen tuntiin + 5s
-            interval = getNextUpdateInterval();
-            restart();
-        }
+        repeat: true
+        onTriggered: showPrice()
     }
     
     Timer {
         id: dailyTimer
+        interval: 10000 // Alustava, joka korvataaan heti käynnistyksessä
         repeat: true
         onTriggered: fetchPrices()
     }
 
     
-    ////////////////////////////
-    /////// FUNKTIOT ///////////
+    ///////////////////////////////
+    ////////// FUNKTIOT ///////////
+    ///////////////////////////////
     
     // Tämä funktio asettaa uuden 30 sekunnin ajastimen jos haku epäonnistui
     function retrySoon() {
@@ -109,15 +106,9 @@ PlasmoidItem {
         )
     }
 
-    function getNextUpdateInterval() {
-        var now = new Date();
-        var nextHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1, 0, 5);
-        return nextHour.getTime() - now.getTime();
-    }
-    
     function getNextMidnightInterval() {
         var now = new Date()
-        var nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 10)
+        var nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5)
         return nextMidnight.getTime() - now.getTime()
     }
 
@@ -129,56 +120,70 @@ PlasmoidItem {
         else if (price < highThreshold - 1) return plasmoid.configuration.mediumColor ?? "#4CA6FF";
         else return plasmoid.configuration.highColor ?? "#FF4C4C";
     }
+  
+    function showPrice() {
 
-
-    function loadPrice() {
-        console.log("Yritetään hakea hintatietoja...");
+        // Varmista että data on olemassa
+        if (!quarterlyPrices || !Array.isArray(quarterlyPrices)) quarterlyPrices = [];
+        if (!hourlyPrices || !Array.isArray(hourlyPrices)) hourlyPrices = [];
 
         var now = new Date();
-        var year = now.getFullYear();
-        var month = ("0" + (now.getMonth() + 1)).slice(-2);
-        var day = ("0" + now.getDate()).slice(-2);
-        var hour = ("0" + now.getHours()).slice(-2);
+        var h = now.getHours();   // numero 0–23
+        var m = now.getMinutes(); // numero 0–59
 
-        var currentUrl = `https://api.porssisahko.net/v1/price.json?date=${year}-${month}-${day}&hour=${hour}`;
-        var nextHourUrl = `https://api.porssisahko.net/v1/price.json?date=${year}-${month}-${day}&hour=${("0" + (now.getHours() + 1)).slice(-2)}`;
+        // Erottele logiikka asetuksen mukaan
+        if (plasmoid.configuration.showQuarterly) {
+            // --- Varttihinta ---
+            var quarter = m < 15 ? 0 : m < 30 ? 15 : m < 45 ? 30 : 45; // numero
 
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", currentUrl);
-        xhr.timeout = 5000; // 5 sekuntia
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState === XMLHttpRequest.DONE) {
-                if (xhr.status === 200) {
-                    var response = JSON.parse(xhr.responseText);
-                    var val = parseFloat(response.price);
-                    price = !isNaN(val) ? val : -1;
+            // Yritä ensin numerokentillä, sitten merkkijonilla (fallback)
+            var q = quarterlyPrices.find(item =>
+                (item.hour === h && item.minute === quarter) ||
+                (item.hour === h.toString().padStart(2, "0") && item.minute === quarter.toString().padStart(2, "0"))
+            );
 
-                    var xhrNext = new XMLHttpRequest();
-                    xhrNext.open("GET", nextHourUrl);
-                    xhrNext.onreadystatechange = function () {
-                        if (xhrNext.readyState === XMLHttpRequest.DONE && xhrNext.status === 200) {
-                            var nextResponse = JSON.parse(xhrNext.responseText);
-                            var nextVal = parseFloat(nextResponse.price);
-                            priceTrend = !isNaN(nextVal)
-                            ? (nextVal > price ? "▲" : nextVal < price ? "▼" : " -")
-                            : " -";
-                        } else {
-                            priceTrend = " -";
-                        }
-                    };
-                    xhrNext.send();
-                } else {
-                    retrySoon();
-                }
+            if (!q) {
+                console.warn("showPrice: Ei varttiriviä tunnille", h, ":", quarter, "— tarkista datan tyypit ja päiväsuodatus");
             }
-        };
-        xhr.onerror = function () {
-            retrySoon();
-        };
-        xhr.ontimeout = function () {
-            retrySoon();
-        };
-        xhr.send();
+
+            price = q && typeof q.price === "number" ? q.price : null;
+
+            // Trend seuraavaan varttiin
+            var nextMinute = (quarter + 15) % 60;
+            var nextHour = h + (nextMinute === 0 ? 1 : 0);
+            var nextQ = quarterlyPrices.find(item =>
+                (item.hour === nextHour && item.minute === nextMinute) ||
+                (item.hour === nextHour.toString().padStart(2, "0") && item.minute === nextMinute.toString().padStart(2, "0"))
+            );
+
+            priceTrend = (nextQ && price != null)
+                ? (nextQ.price > price ? "▲" : nextQ.price < price ? "▼" : " -")
+                : " -";
+
+        } else {
+            // --- Tuntihinta ---
+            var row = hourlyPrices.find(item =>
+                item.hour === h || item.hour === h.toString().padStart(2, "0")
+            );
+
+            if (!row) {
+                console.log("hourlyPrices:", JSON.stringify(hourlyPrices, null, 2));
+                console.warn("showPrice: Ei tuntiriviä tunnille", h, "— tarkista datan tyypit ja päiväsuodatus");
+            }
+
+            price = row && typeof row.price === "number" ? row.price : null;
+
+            // Trend seuraavaan tuntiin
+            var nh = h + 1;
+            var nextRow = hourlyPrices.find(item =>
+                item.hour === nh || item.hour === nh.toString().padStart(2, "0")
+            );
+
+            priceTrend = (nextRow && price != null)
+                ? (nextRow.price > price ? "▲" : nextRow.price < price ? "▼" : " -")
+                : " -";
+        }
+
     }
     
     function fetchPrices() {
@@ -190,7 +195,7 @@ PlasmoidItem {
                 if (xhr.status !== 200) {
                     console.warn("fetchPrices: HTTP virhe:", xhr.status)
                     retrySoon()
-                    return   // → ÄLÄ koske entiseen dataan
+                    return  
                 }
                 
                 try {
@@ -235,9 +240,9 @@ PlasmoidItem {
                         }
                     }).sort((a, b) => parseInt(a.hour) - parseInt(b.hour))
 
-                    // console.log("All: ", allPrices)
                     quarterlyPrices = newQuarterly
                     hourlyPrices = newHourly
+                    showPrice();
 
                 } catch (e) {
                     console.log("JSON-virhe:", e)
@@ -265,9 +270,23 @@ PlasmoidItem {
         root.sortedQuarterlyPrices = arr;
     }
     
+    function positionPopup() {
+
+        var x = root.x + root.width/2 - pricePopup.width/2
+        var y = root.y + root.height
     
-    /////////////////////
-    /// PÄÄNÄKYMÄ ///////
+        // korjaa reuna‑ylitykset
+        if (x < 0) x = 0
+        if (x + pricePopup.width > Screen.width) x = Screen.width - pricePopup.width
+        if (y + pricePopup.height > Screen.height) y = applet.y - pricePopup.height
+
+        pricePopup.x = x
+        pricePopup.y = y
+    }
+    
+    ///////////////////////////
+    /////// PÄÄNÄKYMÄ /////////
+    ///////////////////////////
 
     Rectangle {
         anchors.fill: parent
@@ -321,25 +340,18 @@ PlasmoidItem {
 
     /////////////////////////////////////////
     ///////////////// POPUP /////////////////
+    /////////////////////////////////////////
     
     Popup {
         id: pricePopup
         width: 500
         height: 250
-        modal: true
-        focus: true
-        // location: PlasmaCore.Types.TopEdge
-                
-        //x: -100
-        //y: -100
-        
+        modal: false
+        focus: true      
         z: 1
         
         property int popupX: 0
         property int popupY: 0
-
-        // vain ulkopuolella klikkaus sulkee
-        // closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
         onOpened: {
             let idx = findCurrentIndex()
@@ -363,6 +375,7 @@ PlasmoidItem {
         
         
         MouseArea {
+            id: popupMouse
             anchors.fill: parent
             z: 1
             propagateComposedEvents: true
@@ -374,22 +387,29 @@ PlasmoidItem {
             onClicked: {
                 if (!timeSwitch.containsMouse) {
                     pricePopup.close()
-                }
-            }
-            onPressed: {
-                if (timeSwitch.containsMouse) {
-                    mouse.accepted = false   // anna tapahtuma Switchille
+                    closeTimer.stop()
+                    showPrice()
                 }
             }
             onEntered: closeTimer.stop()
-            onExited: closeTimer.start()
+            onExited: {
+                Qt.callLater(function() {
+                    if (!rootMouse.containsMouse && !popupMouse.containsMouse) {
+                        closeTimer.start()
+                    }
+                })
+            }
+            
         }
         
         Timer {
             id: closeTimer
             interval: 3000  // 1 sekunti
             repeat: false
-            onTriggered: pricePopup.close()
+            onTriggered: {
+                pricePopup.close()
+                showPrice()
+            }
         }
         
         background: Rectangle {
@@ -466,6 +486,7 @@ PlasmoidItem {
                             }
                             priceGraph.requestPaint()
                         })
+                        showPrice()
                     }
                 }
 
@@ -491,7 +512,7 @@ PlasmoidItem {
                     model: (root.plasmoid.configuration.showQuarterly ? root.sortedQuarterlyPrices : root.hourlyPrices)
                     delegate: Row {
  
-                        spacing: 10
+                        //spacing: 10
 
                         // Helpot muuttujat
                         property int itemHour: Number(modelData.hour)
@@ -506,10 +527,11 @@ PlasmoidItem {
 
                         Text {
                             text: root.plasmoid.configuration.showQuarterly
-                            ? (itemHour + ":" + (itemMinute < 10 ? "0" + itemMinute : itemMinute))
-                            : (itemHour + ":00")
+                            ? (itemHour + ":" + (itemMinute < 10 ? "0" + itemMinute + "  " : itemMinute + "  "))
+                            : (itemHour + ":00    ")
 
                             color: isCurrent ? "yellow" : "white"
+                            font.family: "Sans Serif" 
                             font.bold: isCurrent
                             font.pixelSize: 16
 
@@ -521,10 +543,22 @@ PlasmoidItem {
                             }
                         }
                         Text {
+                            id: priceText
                             text: modelData.price !== null
-                                ? (Number(modelData.price) + margin).toFixed(2) + " snt/kWh"
-                                : "puuttuu"
+                                ? (Number(modelData.price) + margin).toFixed(2) : "N/A"
+    
+                            font.family: "Sans Serif" 
                             font.pixelSize: 16
+                            font.bold: isCurrent
+                            color: modelData.price !== null
+                                ? getColor(modelData.price)
+                                : "gray"
+                        }
+                        Text {
+                            text: " snt/kWh"
+                            anchors.baseline: priceText.baseline
+                            font.family: "Sans Serif" 
+                            font.pixelSize: 12
                             font.bold: isCurrent
                             color: modelData.price !== null
                                 ? getColor(modelData.price)
@@ -543,6 +577,8 @@ PlasmoidItem {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             pricePopup.close()
+                            closeTimer.stop()
+                            showPrice()
                         }
                     }
                     
@@ -567,7 +603,7 @@ PlasmoidItem {
                         // var minPrice = Math.min(...prices.map(p => p.price || 0))
                         var minPrice = 0
                         var rawMax = Math.max(...prices.map(p => p.price || 0))
-                        var maxPrice = Math.max(25, rawMax +3)
+                        var maxPrice = Math.max(25, rawMax + 3 + margin)
                         
                         if (minPrice === maxPrice) maxPrice += 1  // välttää nolladivision
 
@@ -579,11 +615,15 @@ PlasmoidItem {
 
                         for (var yValue = 0; yValue <= maxPrice; yValue += 5) {
                             var yPos = height - (yValue / maxPrice) * height
-                            ctx.fillText(yValue.toString(), 30, yPos)
+                            
+                            // piirrä numero vain jos ei ole nolla
+                            if (yValue !== 0) {
+                                ctx.fillText(yValue.toString(), 30, yPos)
+                            }
                             // viiva akselille
                             ctx.strokeStyle = "rgba(255,255,255,0.2)"
                             ctx.beginPath()
-                            ctx.moveTo(0, yPos)
+                            ctx.moveTo(32, yPos)
                             ctx.lineTo(width, yPos)
                             ctx.stroke()
                         }
@@ -601,11 +641,11 @@ PlasmoidItem {
                         for (var i = 0; i < barCount; i++) {
                             var item = prices[i]
                             var p = item.price || 0
-                            var barHeight = 5 + ((p - minPrice) / (maxPrice - minPrice)) * height
+                            var barHeight = ((p + margin) / (maxPrice - minPrice)) * height
                             var x = axisOffset + i * barWidth
                             var y = height - barHeight
 
-                            console.log("Price: ", p)
+                            // console.log("Price: ", p)
                             
                             // tarkista, onko kyseessä nykyinen pylväs
                             var isCurrent = root.plasmoid.configuration.showQuarterly
@@ -682,25 +722,37 @@ PlasmoidItem {
         
     } // Popup
     
+    property bool suppressExit: false
     
     MouseArea {
+        id: rootMouse
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.MiddleButton
         cursorShape: Qt.PointingHandCursor
         hoverEnabled: true
 
-        onClicked: function(mouse) {
+        onClicked: {
+            positionPopup()
             pricePopup.open()
+            closeTimer.stop()
         }
+
+        onExited: {
+            if (!pricePopup.visible) return
+            Qt.callLater(function() {
+                if (!rootMouse.containsMouse && !popupMouse.containsMouse) {
+                    closeTimer.start()
+                }
+            })
+        }
+        onEntered: closeTimer.stop()
     }
 
     Component.onCompleted: {
-        hourlyTimer.interval = getNextUpdateInterval();
-        hourlyTimer.start();
         dailyTimer.interval = getNextMidnightInterval()
         dailyTimer.start()
         console.log("Plasmoid valmis");
-        loadPrice();
         fetchPrices();
+        
     }
 }

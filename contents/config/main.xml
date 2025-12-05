@@ -36,7 +36,9 @@
         <entry name="highThreshold" type="Int">
             <default>20</default>
         </entry>
+        <entry name="showQuarterly" type="Bool">
+            <default>false</default>
+        </entry>
     </group>
 </kcfg>
-
 
