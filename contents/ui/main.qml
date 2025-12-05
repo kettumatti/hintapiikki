@@ -19,6 +19,7 @@ PlasmoidItem {
     property var hourlyPrices: []
     property int currentHour: (new Date()).getHours()
     property int currentMinute: Math.floor((new Date()).getMinutes() / 15) * 15
+    property bool popupIsOpen: false
     
     onQuarterlyPricesChanged: {
         updateSortedQuarterlies()
@@ -82,11 +83,30 @@ PlasmoidItem {
         repeat: true
         onTriggered: fetchPrices()
     }
+    
+    Timer {
+        id: closeTimer
+        interval: 3000  // 1 sekunti
+        repeat: false
+        onTriggered: popupClose()
+    }
 
     
     ///////////////////////////////
     ////////// FUNKTIOT ///////////
     ///////////////////////////////
+    
+    function popupClose() {
+        pricePopup.close()
+        popupIsOpen = false
+        showPrice()
+    }
+
+    function popupOpen(event) {
+        positionPopup(event)
+        pricePopup.open()
+        popupIsOpen = true
+    }
     
     // Tämä funktio asettaa uuden 30 sekunnin ajastimen jos haku epäonnistui
     function retrySoon() {
@@ -276,13 +296,18 @@ PlasmoidItem {
         var y = root.y + root.height
     
         // korjaa reuna‑ylitykset
-        if (x < 0) x = 0
-        if (x + pricePopup.width > Screen.width) x = Screen.width - pricePopup.width
-        if (y + pricePopup.height > Screen.height) y = applet.y - pricePopup.height
+        if (root.x + 500 > Screen.width) x = Screen.width - 550
+        if (root.y + 250 > Screen.height) y = Screen.height - 300
+        // if (x + pricePopup.width > Screen.width) x = Screen.width - pricePopup.width
+        // if (y + pricePopup.height > Screen.height) y = applet.y - pricePopup.height
 
         pricePopup.x = x
         pricePopup.y = y
+
+        pricePopup.x = -50 - width/2
+        pricePopup.y = 20 + height
     }
+    
     
     ///////////////////////////
     /////// PÄÄNÄKYMÄ /////////
@@ -354,6 +379,8 @@ PlasmoidItem {
         property int popupY: 0
 
         onOpened: {
+            popupIsOpen = true
+            
             let idx = findCurrentIndex()
             if (idx >= 0) {
                 hourlyList.positionViewAtIndex(idx, ListView.Center)
@@ -363,16 +390,15 @@ PlasmoidItem {
                 popupX = Screen.width - width - 50
             }
             
-            console.log("Root X:", root.x)
+            /*console.log("Root X:", root.x)
             console.log("Root Y:", root.y)
             console.log("Root W:", root.width)
             console.log("Root H:", root.height)
             console.log("Screen width:", Screen.width)
             console.log("Screen height:", Screen.height)
             console.log("Plasmoid X:", popupX)
-            
-        }
-        
+            */
+        }        
         
         MouseArea {
             id: popupMouse
@@ -386,9 +412,8 @@ PlasmoidItem {
 
             onClicked: {
                 if (!timeSwitch.containsMouse) {
-                    pricePopup.close()
+                    popupClose()
                     closeTimer.stop()
-                    showPrice()
                 }
             }
             onEntered: closeTimer.stop()
@@ -401,17 +426,7 @@ PlasmoidItem {
             }
             
         }
-        
-        Timer {
-            id: closeTimer
-            interval: 3000  // 1 sekunti
-            repeat: false
-            onTriggered: {
-                pricePopup.close()
-                showPrice()
-            }
-        }
-        
+     
         background: Rectangle {
             color: "#222"
             radius: 8
@@ -576,9 +591,8 @@ PlasmoidItem {
                         acceptedButtons: Qt.LeftButton
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            pricePopup.close()
+                            popupClose()
                             closeTimer.stop()
-                            showPrice()
                         }
                     }
                     
@@ -731,14 +745,20 @@ PlasmoidItem {
         cursorShape: Qt.PointingHandCursor
         hoverEnabled: true
 
-        onClicked: {
-            positionPopup()
-            pricePopup.open()
-            closeTimer.stop()
+        onClicked: (event) => {
+            if (!popupIsOpen) {
+                popupOpen()
+                closeTimer.stop()
+            }
+            else {
+                closeTimer.stop()
+                popupClose()
+                
+            }
         }
 
         onExited: {
-            if (!pricePopup.visible) return
+            if (!popupIsOpen) return
             Qt.callLater(function() {
                 if (!rootMouse.containsMouse && !popupMouse.containsMouse) {
                     closeTimer.start()
