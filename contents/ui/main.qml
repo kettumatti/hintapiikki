@@ -290,6 +290,8 @@ PlasmoidItem {
         root.sortedQuarterlyPrices = arr;
     }
     
+    /*
+    
     function positionPopup() {
 
         var x = root.x + root.width/2 - pricePopup.width/2
@@ -307,7 +309,37 @@ PlasmoidItem {
         pricePopup.x = -50 - width/2
         pricePopup.y = 20 + height
     }
-    
+    */
+    function positionPopup() {
+        if (!pricePopup) return
+
+        var popupWidth = pricePopup.width
+        var popupHeight = pricePopup.height
+
+        // Appletti vasen yläkulma
+        var appletPos = root.mapToGlobal(Qt.point(0,0))
+        var x = appletPos.x
+        var y = appletPos.y
+      
+        if (Screen.width - x < popupWidth) {
+            pricePopup.x = x - popupWidth - 50
+        }
+        else { 
+            pricePopup.x = 0
+        }
+        if (Screen.height - y < popupHeight) {
+            pricePopup.y = y - popupHeight - 50
+        }
+        else { 
+            pricePopup.y = 0
+        }
+        
+        console.log(Screen.width, "-", x)
+        console.log("appletPosX: ", appletPos.x, "appletPosY: ", appletPos.y)
+        console.log("popupPosX:  ", pricePopup.x, "popupPosY:  ", pricePopup.y)
+        console.log("screenX: ", Screen.width, "screenY: ", Screen.height)
+    }
+
     
     ///////////////////////////
     /////// PÄÄNÄKYMÄ /////////
