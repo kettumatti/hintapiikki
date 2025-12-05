@@ -47,7 +47,6 @@ PlasmoidItem {
             // Jos aika hyppäsi yli 5 minuuttia,
             // kone on todennäköisesti herännyt horroksesta
             if (diff > 5 * 60 * 1000) {
-                console.log("Kone herännyt horroksesta? Päiviteään hinnat...")
                 fetchPrices()
             }
 
@@ -289,55 +288,35 @@ PlasmoidItem {
         });
         root.sortedQuarterlyPrices = arr;
     }
-    
-    /*
-    
-    function positionPopup() {
 
-        var x = root.x + root.width/2 - pricePopup.width/2
-        var y = root.y + root.height
-    
-        // korjaa reuna‑ylitykset
-        if (root.x + 500 > Screen.width) x = Screen.width - 550
-        if (root.y + 250 > Screen.height) y = Screen.height - 300
-        // if (x + pricePopup.width > Screen.width) x = Screen.width - pricePopup.width
-        // if (y + pricePopup.height > Screen.height) y = applet.y - pricePopup.height
+    function positionPopup() {
+        if (!pricePopup) return
+
+        var popupWidth = pricePopup.width;
+        var popupHeight = pricePopup.height;
+
+        // Appletti vasen yläkulma globaalisti
+        var appletPos = root.mapToGlobal(Qt.point(0,0));
+
+        // Aluksi popup alkaa normaalisti applettiin nähden
+        var x = 0;
+        var y = 0;
+
+        // Jos popup ylittää ruudun oikean reunan, siirrä negatiiviseksi
+        var overflowX = (appletPos.x + popupWidth) - (Screen.width - 60)
+        if (overflowX > 0) {
+            x = -overflowX;
+        }
+
+        // Jos popup ylittää ruudun alareunan, siirrä negatiiviseksi
+        var overflowY = (appletPos.y + popupHeight) - (Screen.height - 60)
+        if (overflowY > 0) {
+            y = -overflowY
+        }
 
         pricePopup.x = x
         pricePopup.y = y
 
-        pricePopup.x = -50 - width/2
-        pricePopup.y = 20 + height
-    }
-    */
-    function positionPopup() {
-        if (!pricePopup) return
-
-        var popupWidth = pricePopup.width
-        var popupHeight = pricePopup.height
-
-        // Appletti vasen yläkulma
-        var appletPos = root.mapToGlobal(Qt.point(0,0))
-        var x = appletPos.x
-        var y = appletPos.y
-      
-        if (Screen.width - x < popupWidth) {
-            pricePopup.x = x - popupWidth - 50
-        }
-        else { 
-            pricePopup.x = 0
-        }
-        if (Screen.height - y < popupHeight) {
-            pricePopup.y = y - popupHeight - 50
-        }
-        else { 
-            pricePopup.y = 0
-        }
-        
-        console.log(Screen.width, "-", x)
-        console.log("appletPosX: ", appletPos.x, "appletPosY: ", appletPos.y)
-        console.log("popupPosX:  ", pricePopup.x, "popupPosY:  ", pricePopup.y)
-        console.log("screenX: ", Screen.width, "screenY: ", Screen.height)
     }
 
     
@@ -421,15 +400,7 @@ PlasmoidItem {
             if (root.x + width > Screen.width) {
                 popupX = Screen.width - width - 50
             }
-            
-            /*console.log("Root X:", root.x)
-            console.log("Root Y:", root.y)
-            console.log("Root W:", root.width)
-            console.log("Root H:", root.height)
-            console.log("Screen width:", Screen.width)
-            console.log("Screen height:", Screen.height)
-            console.log("Plasmoid X:", popupX)
-            */
+
         }        
         
         MouseArea {
@@ -543,8 +514,6 @@ PlasmoidItem {
                     color: "white"
                     Layout.alignment: Qt.AlignVCenter
                 }
-
-                
             }
 
             RowLayout {
@@ -615,7 +584,7 @@ PlasmoidItem {
                     
                     ScrollBar.vertical: ScrollBar {
                         policy: ScrollBar.AsNeeded   // vaihtoehdot: AlwaysOn, AlwaysOff, AsNeeded
-                        interactive: false            // käyttäjä voi vetää palkkia
+                        interactive: false
                     }
                     
                     MouseArea {
@@ -690,8 +659,6 @@ PlasmoidItem {
                             var barHeight = ((p + margin) / (maxPrice - minPrice)) * height
                             var x = axisOffset + i * barWidth
                             var y = height - barHeight
-
-                            // console.log("Price: ", p)
                             
                             // tarkista, onko kyseessä nykyinen pylväs
                             var isCurrent = root.plasmoid.configuration.showQuarterly
@@ -718,7 +685,6 @@ PlasmoidItem {
                                 ctx.closePath()
                                 ctx.fill()
                             }
-
 
                             ctx.fillRect(x, y, barWidth * 0.8, barHeight) // jätetään pieni rako
                             
@@ -803,7 +769,6 @@ PlasmoidItem {
     Component.onCompleted: {
         dailyTimer.interval = getNextMidnightInterval()
         dailyTimer.start()
-        console.log("Plasmoid valmis");
         fetchPrices();
         
     }
