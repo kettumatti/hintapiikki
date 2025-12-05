@@ -3,6 +3,7 @@ import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 import org.kde.plasma.plasmoid 2.0
 
+
 PlasmoidItem {
     id: root
     width: 300
@@ -18,15 +19,40 @@ PlasmoidItem {
     property var hourlyPrices: []
     property int currentHour: (new Date()).getHours()
     property int currentMinute: Math.floor((new Date()).getMinutes() / 15) * 15
-
+    
     onQuarterlyPricesChanged: {
         updateSortedQuarterlies()
         priceGraph.requestPaint()
     }
     onHourlyPricesChanged: priceGraph.requestPaint()
 
+    
+    ///////////////////////
+    ///// TIMERIT /////////
+    
+    Timer {
+        id: wakeChecker
+        interval: 20000     // tarkistetaan 20s välein
+        running: true
+        repeat: true
 
-    ///// TIMERIT
+        property double lastTime: Date.now()
+
+        onTriggered: {
+            let now = Date.now()
+            let diff = now - lastTime
+
+            // Jos aika hyppäsi yli 5 minuuttia,
+            // kone on todennäköisesti herännyt horroksesta
+            if (diff > 5 * 60 * 1000) {
+                console.log("Detected wake from sleep (time jump). Reloading...")
+                loadPrice()
+                fetchPrices()
+            }
+
+            lastTime = now
+        }
+    }
 
     Timer {
         id: timeUpdater
@@ -61,6 +87,185 @@ PlasmoidItem {
         onTriggered: fetchPrices()
     }
 
+    
+    ////////////////////////////
+    /////// FUNKTIOT ///////////
+    
+    // Tämä funktio asettaa uuden 30 sekunnin ajastimen jos haku epäonnistui
+    function retrySoon() {
+        console.log("Verkkovirhe tai timeout – yritetään uudelleen 30 sekunnin päästä");
+        Qt.createQmlObject(
+            `import QtQuick 2.0; Timer {
+                interval: 30 * 1000
+                running: true
+                repeat: false
+                onTriggered: { 
+                    loadPrice()
+                    fetchPrices()
+                }
+            }`,
+            plasmoid,
+            "RetryTimer"
+        )
+    }
+
+    function getNextUpdateInterval() {
+        var now = new Date();
+        var nextHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1, 0, 5);
+        return nextHour.getTime() - now.getTime();
+    }
+    
+    function getNextMidnightInterval() {
+        var now = new Date()
+        var nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 10)
+        return nextMidnight.getTime() - now.getTime()
+    }
+
+    function getColor(price) {
+        let lowThreshold = plasmoid.configuration.lowThreshold ?? 8;
+        let highThreshold = plasmoid.configuration.highThreshold ?? 20;
+
+        if (price < lowThreshold - 1) return plasmoid.configuration.lowColor ?? "#7CFF4C";
+        else if (price < highThreshold - 1) return plasmoid.configuration.mediumColor ?? "#4CA6FF";
+        else return plasmoid.configuration.highColor ?? "#FF4C4C";
+    }
+
+
+    function loadPrice() {
+        console.log("Yritetään hakea hintatietoja...");
+
+        var now = new Date();
+        var year = now.getFullYear();
+        var month = ("0" + (now.getMonth() + 1)).slice(-2);
+        var day = ("0" + now.getDate()).slice(-2);
+        var hour = ("0" + now.getHours()).slice(-2);
+
+        var currentUrl = `https://api.porssisahko.net/v1/price.json?date=${year}-${month}-${day}&hour=${hour}`;
+        var nextHourUrl = `https://api.porssisahko.net/v1/price.json?date=${year}-${month}-${day}&hour=${("0" + (now.getHours() + 1)).slice(-2)}`;
+
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", currentUrl);
+        xhr.timeout = 5000; // 5 sekuntia
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                if (xhr.status === 200) {
+                    var response = JSON.parse(xhr.responseText);
+                    var val = parseFloat(response.price);
+                    price = !isNaN(val) ? val : -1;
+
+                    var xhrNext = new XMLHttpRequest();
+                    xhrNext.open("GET", nextHourUrl);
+                    xhrNext.onreadystatechange = function () {
+                        if (xhrNext.readyState === XMLHttpRequest.DONE && xhrNext.status === 200) {
+                            var nextResponse = JSON.parse(xhrNext.responseText);
+                            var nextVal = parseFloat(nextResponse.price);
+                            priceTrend = !isNaN(nextVal)
+                            ? (nextVal > price ? "▲" : nextVal < price ? "▼" : " -")
+                            : " -";
+                        } else {
+                            priceTrend = " -";
+                        }
+                    };
+                    xhrNext.send();
+                } else {
+                    retrySoon();
+                }
+            }
+        };
+        xhr.onerror = function () {
+            retrySoon();
+        };
+        xhr.ontimeout = function () {
+            retrySoon();
+        };
+        xhr.send();
+    }
+    
+    function fetchPrices() {
+        var xhr = new XMLHttpRequest()
+        xhr.open("GET", "https://api.porssisahko.net/v2/latest-prices.json")
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                // 1) Tarkista HTTP-status
+                if (xhr.status !== 200) {
+                    console.warn("fetchPrices: HTTP virhe:", xhr.status)
+                    retrySoon()
+                    return   // → ÄLÄ koske entiseen dataan
+                }
+                
+                try {
+                    var response = JSON.parse(xhr.responseText)
+                    
+                    // Uusien tietojen validointi
+                    if (!response.prices || !Array.isArray(response.prices)) {
+                        console.warn("❌ fetchPrices: Datamuoto virheellinen")
+                        retrySoon()
+                        return
+                    }
+                    
+                    allPrices = response.prices
+
+                    const todayDateStr = new Date().toLocaleDateString("sv-SE")
+
+                    const newQuarterly = allPrices
+                        .filter(item => new Date(item.startDate).toLocaleDateString("sv-SE") === todayDateStr)
+                        .map(item => {
+                            const localDate = new Date(item.startDate)
+                            return {
+                                hour: localDate.getHours().toString().padStart(2, "0"),
+                                minute: localDate.getMinutes().toString().padStart(2, "0"),
+                                price: item.price
+                            }
+                        })
+
+                    const hourlyMap = {}
+                    newQuarterly.forEach(q => {
+                        if (!hourlyMap[q.hour]) hourlyMap[q.hour] = []
+                        hourlyMap[q.hour].push(q.price)
+                    })
+
+                    const newHourly = Object.keys(hourlyMap).map(hour => {
+                        const prices = hourlyMap[hour]
+                        if (prices.length === 4) {
+                            const avg = prices.reduce((a, b) => a + b, 0) / prices.length
+                            return { hour, price: avg }
+                        } else {
+                            console.warn("⚠️ Tunnilta puuttuu vartteja:", hour)
+                            return { hour, price: null }
+                        }
+                    }).sort((a, b) => parseInt(a.hour) - parseInt(b.hour))
+
+                    // console.log("All: ", allPrices)
+                    quarterlyPrices = newQuarterly
+                    hourlyPrices = newHourly
+
+                } catch (e) {
+                    console.log("JSON-virhe:", e)
+                    hourlyPrices = []
+                }
+            }
+        }
+        xhr.onerror = function () {
+            retrySoon();
+        };
+        xhr.ontimeout = function () {
+            retrySoon();
+        };
+        xhr.send()
+    }
+
+    function updateSortedQuarterlies() {
+        let arr = root.quarterlyPrices.slice();  // kopio
+        arr.sort((a, b) => {
+            let ha = Number(a.hour);
+            let hb = Number(b.hour);
+            if (ha !== hb) return ha - hb;
+            return Number(a.minute ?? 0) - Number(b.minute ?? 0);
+        });
+        root.sortedQuarterlyPrices = arr;
+    }
+    
+    
     /////////////////////
     /// PÄÄNÄKYMÄ ///////
 
@@ -114,149 +319,25 @@ PlasmoidItem {
     }
 
 
-    function getNextUpdateInterval() {
-        var now = new Date();
-        var nextHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1, 0, 5);
-        return nextHour.getTime() - now.getTime();
-    }
-    
-    function getNextMidnightInterval() {
-        var now = new Date()
-        var nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 10)
-        return nextMidnight.getTime() - now.getTime()
-    }
-
-    function getColor(price) {
-        let lowThreshold = plasmoid.configuration.lowThreshold ?? 8;
-        let highThreshold = plasmoid.configuration.highThreshold ?? 20;
-
-        if (price < lowThreshold - 1) return plasmoid.configuration.lowColor ?? "#7CFF4C";
-        else if (price < highThreshold - 1) return plasmoid.configuration.mediumColor ?? "#4CA6FF";
-        else return plasmoid.configuration.highColor ?? "#FF4C4C";
-    }
-
-
-    function loadPrice() {
-        console.log("Yritetään hakea hintatietoja...");
-
-        var now = new Date();
-        var year = now.getFullYear();
-        var month = ("0" + (now.getMonth() + 1)).slice(-2);
-        var day = ("0" + now.getDate()).slice(-2);
-        var hour = ("0" + now.getHours()).slice(-2);
-
-        var currentUrl = `https://api.porssisahko.net/v1/price.json?date=${year}-${month}-${day}&hour=${hour}`;
-        var nextHourUrl = `https://api.porssisahko.net/v1/price.json?date=${year}-${month}-${day}&hour=${("0" + (now.getHours() + 1)).slice(-2)}`;
-
-        var xhrCurrent = new XMLHttpRequest();
-        xhrCurrent.open("GET", currentUrl);
-        xhrCurrent.timeout = 5000; // 5 sekuntia
-        xhrCurrent.onreadystatechange = function () {
-            if (xhrCurrent.readyState === XMLHttpRequest.DONE) {
-                if (xhrCurrent.status === 200) {
-                    var response = JSON.parse(xhrCurrent.responseText);
-                    var val = parseFloat(response.price);
-                    price = !isNaN(val) ? val : -1;
-
-                    var xhrNext = new XMLHttpRequest();
-                    xhrNext.open("GET", nextHourUrl);
-                    xhrNext.onreadystatechange = function () {
-                        if (xhrNext.readyState === XMLHttpRequest.DONE && xhrNext.status === 200) {
-                            var nextResponse = JSON.parse(xhrNext.responseText);
-                            var nextVal = parseFloat(nextResponse.price);
-                            priceTrend = !isNaN(nextVal)
-                            ? (nextVal > price ? "▲" : nextVal < price ? "▼" : " -")
-                            : " -";
-                        } else {
-                            priceTrend = " -";
-                        }
-                    };
-                    xhrNext.send();
-                } else {
-                    retrySoon();
-                }
-            }
-        };
-        xhrCurrent.onerror = function () {
-            retrySoon();
-        };
-        xhrCurrent.ontimeout = function () {
-            retrySoon();
-        };
-        xhrCurrent.send();
-    }
-    
-    function fetchPrices() {
-        var xhr = new XMLHttpRequest()
-        xhr.open("GET", "https://api.porssisahko.net/v2/latest-prices.json")
-        xhr.onreadystatechange = function() {
-            if (xhr.readyState === XMLHttpRequest.DONE) {
-                try {
-                    var response = JSON.parse(xhr.responseText)
-                    allPrices = response.prices
-
-                    const todayDateStr = new Date().toLocaleDateString("sv-SE")
-
-                    quarterlyPrices = allPrices
-                        .filter(item => new Date(item.startDate).toLocaleDateString("sv-SE") === todayDateStr)
-                        .map(item => {
-                            const localDate = new Date(item.startDate)
-                            return {
-                                hour: localDate.getHours().toString().padStart(2, "0"),
-                                minute: localDate.getMinutes().toString().padStart(2, "0"),
-                                price: item.price
-                            }
-                        })
-
-                    const hourlyMap = {}
-                    quarterlyPrices.forEach(q => {
-                        if (!hourlyMap[q.hour]) hourlyMap[q.hour] = []
-                        hourlyMap[q.hour].push(q.price)
-                    })
-
-                    hourlyPrices = Object.keys(hourlyMap).map(hour => {
-                        const prices = hourlyMap[hour]
-                        if (prices.length === 4) {
-                            const avg = prices.reduce((a, b) => a + b, 0) / prices.length
-                            return { hour, price: avg }
-                        } else {
-                            console.warn("⚠️ Tunnilta puuttuu vartteja:", hour)
-                            return { hour, price: null }
-                        }
-                    }).sort((a, b) => parseInt(a.hour) - parseInt(b.hour))
-
-                    // console.log("All: ", allPrices)
-
-                } catch (e) {
-                    console.log("JSON-virhe:", e)
-                    hourlyPrices = []
-                }
-            }
-        }
-        xhr.send()
-    }
-
-    function updateSortedQuarterlies() {
-        let arr = root.quarterlyPrices.slice();  // kopio
-        arr.sort((a, b) => {
-            let ha = Number(a.hour);
-            let hb = Number(b.hour);
-            if (ha !== hb) return ha - hb;
-            return Number(a.minute ?? 0) - Number(b.minute ?? 0);
-        });
-        root.sortedQuarterlyPrices = arr;
-    }
-
     /////////////////////////////////////////
     ///////////////// POPUP /////////////////
     
     Popup {
         id: pricePopup
-        width: 450
+        width: 500
         height: 250
         modal: true
         focus: true
+        // location: PlasmaCore.Types.TopEdge
+                
+        //x: -100
+        //y: -100
+        
         z: 1
+        
+        property int popupX: 0
+        property int popupY: 0
+
         // vain ulkopuolella klikkaus sulkee
         // closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
@@ -265,7 +346,21 @@ PlasmoidItem {
             if (idx >= 0) {
                 hourlyList.positionViewAtIndex(idx, ListView.Center)
             }
+            
+            if (root.x + width > Screen.width) {
+                popupX = Screen.width - width - 50
+            }
+            
+            console.log("Root X:", root.x)
+            console.log("Root Y:", root.y)
+            console.log("Root W:", root.width)
+            console.log("Root H:", root.height)
+            console.log("Screen width:", Screen.width)
+            console.log("Screen height:", Screen.height)
+            console.log("Plasmoid X:", popupX)
+            
         }
+        
         
         MouseArea {
             anchors.fill: parent
@@ -457,7 +552,7 @@ PlasmoidItem {
                 
                 Canvas {
                     id: priceGraph
-                    width: 220  // voit vaihtaa tarpeen mukaan
+                    width: 300  // voit vaihtaa tarpeen mukaan
                     Layout.fillHeight: true
                     
                     onPaint: {
@@ -469,13 +564,34 @@ PlasmoidItem {
                         if (prices.length === 0) return
 
                         // laske min ja max hintatasot
-                        var minPrice = Math.min(...prices.map(p => p.price || 0))
-                        var maxPrice = Math.max(...prices.map(p => p.price || 0))
+                        // var minPrice = Math.min(...prices.map(p => p.price || 0))
+                        var minPrice = 0
+                        var rawMax = Math.max(...prices.map(p => p.price || 0))
+                        var maxPrice = Math.max(25, rawMax +3)
                         
                         if (minPrice === maxPrice) maxPrice += 1  // välttää nolladivision
 
+                        // piirretään Y-akselin viivat ja numerot
+                        ctx.fillStyle = "white"
+                        ctx.font = "12px Arial"
+                        ctx.textAlign = "right"
+                        ctx.textBaseline = "middle"
+
+                        for (var yValue = 0; yValue <= maxPrice; yValue += 5) {
+                            var yPos = height - (yValue / maxPrice) * height
+                            ctx.fillText(yValue.toString(), 30, yPos)
+                            // viiva akselille
+                            ctx.strokeStyle = "rgba(255,255,255,0.2)"
+                            ctx.beginPath()
+                            ctx.moveTo(0, yPos)
+                            ctx.lineTo(width, yPos)
+                            ctx.stroke()
+                        }
+                        
+                        var axisOffset = 40; // tilaa Y-akselin numeroille
+                        
                         var barCount = prices.length
-                        var barWidth = width / barCount
+                        var barWidth = (width - axisOffset) / barCount
 
                         var now = new Date()
                         var currentHour = now.getHours()
@@ -486,9 +602,11 @@ PlasmoidItem {
                             var item = prices[i]
                             var p = item.price || 0
                             var barHeight = 5 + ((p - minPrice) / (maxPrice - minPrice)) * height
-                            var x = i * barWidth
+                            var x = axisOffset + i * barWidth
                             var y = height - barHeight
 
+                            console.log("Price: ", p)
+                            
                             // tarkista, onko kyseessä nykyinen pylväs
                             var isCurrent = root.plasmoid.configuration.showQuarterly
                                 ? (Number(item.hour) === currentHour && Number(item.minute) === currentQuarter)
@@ -564,24 +682,6 @@ PlasmoidItem {
         
     } // Popup
     
-    
-
-    
-
-    // Tämä funktio asettaa uuden 30 sekunnin ajastimen jos haku epäonnistui
-    function retrySoon() {
-        console.log("Verkkovirhe tai timeout – yritetään uudelleen 30 sekunnin päästä");
-        Qt.createQmlObject(
-            `import QtQuick 2.0; Timer {
-                interval: 1 * 30 * 1000;
-                running: true;
-                repeat: false;
-                onTriggered: loadPrice();
-            }`,
-            plasmoid,
-            "RetryTimer"
-        );
-    }
     
     MouseArea {
         anchors.fill: parent
