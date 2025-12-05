@@ -77,6 +77,18 @@ PlasmoidItem {
     }
     
     Timer {
+        id: retryTimer
+        interval: 30 * 1000
+        repeat: false
+        running: false
+
+        onTriggered: {
+            loadPrice()
+            fetchPrices()
+        }
+    }
+    
+    Timer {
         id: dailyTimer
         interval: 10000 // Alustava, joka korvataaan heti käynnistyksessä
         repeat: true
@@ -110,19 +122,7 @@ PlasmoidItem {
     // Tämä funktio asettaa uuden 30 sekunnin ajastimen jos haku epäonnistui
     function retrySoon() {
         console.log("Verkkovirhe tai timeout – yritetään uudelleen 30 sekunnin päästä");
-        Qt.createQmlObject(
-            `import QtQuick 2.0; Timer {
-                interval: 30 * 1000
-                running: true
-                repeat: false
-                onTriggered: { 
-                    loadPrice()
-                    fetchPrices()
-                }
-            }`,
-            plasmoid,
-            "RetryTimer"
-        )
+        retryTimer.restart()
     }
 
     function getNextMidnightInterval() {
