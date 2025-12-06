@@ -198,5 +198,34 @@ KCM.SimpleKCM {
             checked: getConfigValue("showQuarterly", false) ?? false
             onToggled: plasmoid.configuration.showQuarterly = checked
         }
+        
+        ///// RESET ////
+        Button {
+            text: qsTr("Palauta oletukset")
+            icon.name: "edit-undo"   // KDE:n oletusikoni
+            onClicked: {
+                // Palauta jokainen avain skeeman oletusarvoon
+                plasmoid.configuration.priceMargin = 0.49
+                plasmoid.configuration.bgColor = "#1E1E1E"
+                plasmoid.configuration.headerColor = "#FFD966"
+                plasmoid.configuration.highColor = "#FF4C4C"
+                plasmoid.configuration.mediumColor = "#4CA6FF"
+                plasmoid.configuration.lowColor = "#7CFF4C"
+                plasmoid.configuration.lowThreshold = 8
+                plasmoid.configuration.highThreshold = 20
+                plasmoid.configuration.showQuarterly = false
+
+                // Päivitä UI:n esikatselut
+                priceMargin.text = "0,49"
+                bgColorPreview.color = plasmoid.configuration.bgColor
+                headerColorPreview.color = plasmoid.configuration.headerColor
+                highColorPreview.color = plasmoid.configuration.highColor
+                mediumColorPreview.color = plasmoid.configuration.mediumColor
+                lowColorPreview.color = plasmoid.configuration.lowColor
+                lowThreshold.value = plasmoid.configuration.lowThreshold
+                highThreshold.value = plasmoid.configuration.highThreshold
+                showQuarterly.checked = plasmoid.configuration.showQuarterly
+            }
+        }
     }
 }
