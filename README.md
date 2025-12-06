@@ -1,0 +1,50 @@
+# Pörssisähkö-applet KDE Plasma 6:lle
+
+## 📖 Kuvaus
+**Hintapiikki** on KDE Plasma 6 ‑appletti, joka näyttää **pörssisähkön spot-hinnan** suoraan työpöydällä.  
+Perusnäkymässä näkyy sähkön kokonaishinta (spot-hinta + sähkösopimuksen marginaali) ja hinnan perässä oleva nuoli kertoo, mihin suuntaan hinta on muuttumassa.  
+
+Applettia klikkaamalla avautuu popup, jossa näet koko vuorokauden hintatiedot sekä suuntaa-antavan graafin. Popupissa hintatietoja voi selata scrollaamalla.  
+Hinta/hinnat näytetään joko **tunneittain** tai **varteittain (15 min)**.
+
+---
+
+## ✨ Ominaisuudet
+- Näyttää pörssisähkön spot-hinnan tunnin tai 15 minuutin tarkkuudella.
+- Mahdollisuus lisätä oma marginaali (snt/kWh).
+- Värit eri hintatasoille:
+  - **Halpa hinta**
+  - **Normaali hinta**
+  - **Korkea hinta**
+- Konfiguroitavat raja-arvot halvalle ja kalliille hinnalle.
+- Taustan ja otsikon värit valittavissa.
+- Popup-näkymä graafilla ja scrollattavilla hintatiedoilla.
+
+---
+
+## 🛠️ Asennus
+1. Kloonaa repositorio ja asenna appletti:
+   ```bash
+   git clone https://github.com/kettumatti/hintapiikki.git
+   cd hintapiikki
+   kpackagetool6 --type=Plasma/Applet --install ./
+   ```
+2. Siirry työpöydän muokkaustilaan ja lisää **Hintapiikki** työpöydälle
+
+---
+
+## 📸 Kuvakaappaukset
+
+![Perusnäkymä](screenshots/Appletti.jpg)<br>
+*Appletin perusnäkymä työpöydällä.*
+
+![Popup-näkymä](screenshots/Popup.jpg)<br>
+*Koko vuorokauden hintatiedot ja graafi popup-ikkunassa.*
+
+![Asetukset](screenshots/Asetukset.jpg)<br>
+*Appletin asetukset.*
+
+---
+
+## 📊 Data
+Appletti noutaa sähkön hinnat [porssisahko.net](https://porssisahko.net) API:sta.  
