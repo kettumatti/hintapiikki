@@ -536,8 +536,10 @@ PlasmoidItem {
 
                         Text {
                             text: root.plasmoid.configuration.showQuarterly
-                            ? (itemHour + ":" + (itemMinute < 10 ? "0" + itemMinute + "  " : itemMinute + "  "))
-                            : (itemHour + ":00    ")
+                                ? ((itemHour < 10 ? "0" + itemHour : itemHour)
+                                + ":" + (itemMinute < 10 ? "0" + itemMinute : itemMinute) + "    ")
+                                : ((itemHour < 10 ? "0" + itemHour : itemHour) + ":00    ")
+
 
                             color: isCurrent ? "yellow" : "white"
                             font.family: "Sans Serif" 
@@ -617,7 +619,7 @@ PlasmoidItem {
 
                         // piirretään Y-akselin viivat ja numerot
                         ctx.fillStyle = "white"
-                        ctx.font = "12px Arial"
+                        //ctx.font = "Sans Serif"
                         ctx.textAlign = "right"
                         ctx.textBaseline = "middle"
 
