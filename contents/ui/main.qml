@@ -87,7 +87,19 @@ PlasmoidItem {
     Timer {
         id: dailyTimer
         interval: 10000 // Alustava, joka korvataaan heti käynnistyksessä
+        repeat: false
+        onTriggered: {
+            fetchPrices()
+            interval = getNextMidnightInterval()
+            start()
+        }
+    }
+
+    Timer {
+        id: hourlyTimer
+        interval: 60 * 60 * 1000 // 1 tunti millisekunteina
         repeat: true
+        running: true
         onTriggered: fetchPrices()
     }
     
@@ -764,6 +776,7 @@ PlasmoidItem {
     Component.onCompleted: {
         dailyTimer.interval = getNextMidnightInterval()
         dailyTimer.start()
+        hourlyTimer.start()
         fetchPrices();
         
     }
