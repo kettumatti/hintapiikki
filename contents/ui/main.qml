@@ -48,6 +48,9 @@ PlasmoidItem {
             // kone on todennäköisesti herännyt horroksesta
             if (diff > 5 * 60 * 1000) {
                 fetchPrices()
+                dailyTimer.stop()
+                dailyTimer.interval = getNextMidnightInterval()
+                dailyTimer.start()
             }
 
             lastTime = now
