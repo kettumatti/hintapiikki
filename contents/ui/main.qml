@@ -636,6 +636,7 @@ PlasmoidItem {
                     ScrollBar.vertical: ScrollBar {
                         policy: ScrollBar.AsNeeded   // vaihtoehdot: AlwaysOn, AlwaysOff, AsNeeded
                         interactive: false
+                        width: 1
                     }
                     
                     MouseArea {
@@ -654,7 +655,7 @@ PlasmoidItem {
                 
                 Canvas {
                     id: priceGraph
-                    width: 300  // voit vaihtaa tarpeen mukaan
+                    width: 310
                     Layout.fillHeight: true
                     
                     onPaint: {
