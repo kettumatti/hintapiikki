@@ -32,6 +32,9 @@
         <entry name="showQuarterly" type="Bool">
             <default>false</default>
         </entry>
+        <entry key="lastFetchDate" type="String">
+            <default>1970-01-01T00:00:00.000Z</default>
+    </entry>
     </group>
 </kcfg>
 
