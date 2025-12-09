@@ -20,6 +20,7 @@ PlasmoidItem {
     property int currentHour: (new Date()).getHours()
     property int currentMinute: Math.floor((new Date()).getMinutes() / 15) * 15
     property bool popupIsOpen: false
+
     
     onQuarterlyPricesChanged: {
         updateSortedQuarterlies()
@@ -44,13 +45,13 @@ PlasmoidItem {
             let now = Date.now()
             let diff = now - lastTime
 
-            // Jos aika hyppäsi yli 5 minuuttia,
+            // Jos aika hyppäsi yli 3 minuuttia,
             // kone on todennäköisesti herännyt horroksesta
-            if (diff > 5 * 60 * 1000) {
-                fetchPrices()
-                dailyTimer.stop()
-                dailyTimer.interval = getNextMidnightInterval()
-                dailyTimer.start()
+            if (diff > 3 * 60 * 1000) {
+                updateCurrentTime()
+                showPrice()
+                quarterTimer.interval = getNextQuarterInterval()
+                quarterTimer.start()
             }
 
             lastTime = now
@@ -58,27 +59,21 @@ PlasmoidItem {
     }
 
     Timer {
-        id: timeUpdater
-        interval: 1000 * 10 // 10 sekunnin välein; riittää päivitykseen
+        id: quarterTimer
+        interval: getNextQuarterInterval()
         running: true
-        repeat: true
+        repeat: false
+        
         onTriggered: {
-            var now = new Date()
-            var nextQuarter = Math.ceil((now.getMinutes() + 1) / 15) * 15
-            // päivitä currentHour/currentMinute
-            currentHour = now.getHours()
-            currentMinute = Math.floor(now.getMinutes() / 15) * 15
+            updateCurrentTime()
+            showPrice()
+
+            // Aseta seuraava laukaisu
+            interval = getNextQuarterInterval()
+            start()
         }
     }
-
-    Timer {
-        id: refreshTimer
-        interval: 10000
-        running: true
-        repeat: true
-        onTriggered: showPrice()
-    }
-    
+  
     Timer {
         id: retryTimer
         interval: 30 * 1000
@@ -86,26 +81,7 @@ PlasmoidItem {
         running: false
         onTriggered: fetchPrices()
     }
-    
-    Timer {
-        id: dailyTimer
-        interval: 10000 // Alustava, joka korvataaan heti käynnistyksessä
-        repeat: false
-        onTriggered: {
-            fetchPrices()
-            interval = getNextMidnightInterval()
-            start()
-        }
-    }
 
-    Timer {
-        id: hourlyTimer
-        interval: 60 * 60 * 1000 // 1 tunti millisekunteina
-        repeat: true
-        running: true
-        onTriggered: fetchPrices()
-    }
-    
     Timer {
         id: closeTimer
         interval: 3000  // 3 sekuntia
@@ -117,6 +93,8 @@ PlasmoidItem {
     ////////////////////////////////////////////////////////////
     ///////////////////////// FUNKTIOT /////////////////////////
     ////////////////////////////////////////////////////////////
+    
+    // Popupin sulkeminen ja avaaminen 
     
     function popupClose() {
         pricePopup.close()
@@ -130,16 +108,52 @@ PlasmoidItem {
         popupIsOpen = true
     }
     
+    // Päivitetään aika, jotta hintataulukosta pystytään korostamaan kuluvan tunnin/vartin hinta
+    
+    function updateCurrentTime() {
+        var now = new Date()
+        currentHour = now.getHours()
+        currentMinute = Math.floor(now.getMinutes() / 15) * 15
+    }
+    
+    // Uudelleenyritys datan hakemiseksi, jos esim. verkkoa ei ole.
+    
     function retrySoon() {
         console.log("Verkkovirhe tai timeout – yritetään uudelleen 30 sekunnin päästä");
         retryTimer.restart()
     }
+   
+    // Näkymän päivitys vartin välein
+    
+    function getNextQuarterInterval() {
+        let now = new Date()
+        let minutes = now.getMinutes()
+        let nextQuarter = Math.floor(minutes / 15) * 15 + 15
+        let nextHour = now.getHours()
+        let nextDay = now.getDate()
 
-    function getNextMidnightInterval() {
-        var now = new Date()
-        var nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5)
-        return nextMidnight.getTime() - now.getTime()
+        if (nextQuarter >= 60) {
+            nextQuarter = 0
+            nextHour += 1
+            if (nextHour >= 24) {
+                nextHour = 0
+                nextDay += 1
+            }
+        }
+
+        // seuraava rajapiste + 1 sekunti
+        let next = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            nextDay,
+            nextHour,
+            nextQuarter,
+            1, 0
+        )
+
+        return next.getTime() - now.getTime()
     }
+
 
     function getColor(price) {
         let lowThreshold = plasmoid.configuration.lowThreshold ?? 8;
@@ -149,8 +163,27 @@ PlasmoidItem {
         else if (price < highThreshold - 1) return plasmoid.configuration.mediumColor ?? "#4CA6FF";
         else return plasmoid.configuration.highColor ?? "#FF4C4C";
     }
+    
+    function dataIsFromToday() {
+        const last = plasmoid.configuration.lastFetchDate;
+        if (!last)
+            return false;
+
+        const lastDate = new Date(last);
+        const now = new Date();
+
+        return lastDate.getFullYear() === now.getFullYear()
+            && lastDate.getMonth() === now.getMonth()
+            && lastDate.getDate() === now.getDate();
+    }
+
   
     function showPrice() {
+    
+        if (!dataIsFromToday()) {
+            fetchPrices();
+            return;
+        }
 
         // Varmista että data on olemassa
         if (!quarterlyPrices || !Array.isArray(quarterlyPrices)) quarterlyPrices = [];
@@ -271,6 +304,8 @@ PlasmoidItem {
 
                     quarterlyPrices = newQuarterly
                     hourlyPrices = newHourly
+                    plasmoid.configuration.lastFetchDate = new Date().toISOString()
+
                     showPrice();
 
                 } catch (e) {
@@ -280,11 +315,11 @@ PlasmoidItem {
             }
         }
         xhr.onerror = function () {
-            retrySoon();
-        };
+            retrySoon()
+        }
         xhr.ontimeout = function () {
-            retrySoon();
-        };
+            retrySoon()
+        }
         xhr.send()
     }
 
@@ -337,7 +372,7 @@ PlasmoidItem {
     Rectangle {
         anchors.fill: parent
         color: plasmoid.configuration.bgColor ?? "#1E1E1E"
-        opacity: plasmoid.configuration.bgOpacity ?? 1.0
+        // opacity: plasmoid.configuration.bgOpacity ?? 1.0
     }
 
     Column {
@@ -475,7 +510,6 @@ PlasmoidItem {
                     Layout.alignment: Qt.AlignVCenter
                 }
 
-                
                 Switch {
                     id: timeSwitch
                     checked: root.plasmoid.configuration.showQuarterly || false
@@ -536,10 +570,8 @@ PlasmoidItem {
                     clip: true
                     z: 0
                     model: (root.plasmoid.configuration.showQuarterly ? root.sortedQuarterlyPrices : root.hourlyPrices)
-                    delegate: Row {
+                    delegate: RowLayout {
  
-                        //spacing: 10
-
                         // Helpot muuttujat
                         property int itemHour: Number(modelData.hour)
                         property int itemMinute: Number(modelData.minute ?? 0)
@@ -552,10 +584,10 @@ PlasmoidItem {
                         Text {
                             text: root.plasmoid.configuration.showQuarterly
                                 ? ((itemHour < 10 ? "0" + itemHour : itemHour)
-                                + ":" + (itemMinute < 10 ? "0" + itemMinute : itemMinute) + "    ")
-                                : ((itemHour < 10 ? "0" + itemHour : itemHour) + ":00    ")
+                                + ":" + (itemMinute < 10 ? "0" + itemMinute : itemMinute))
+                                : ((itemHour < 10 ? "0" + itemHour : itemHour) + ":00")
 
-
+                            Layout.preferredWidth: 50
                             color: isCurrent ? "yellow" : "white"
                             font.family: "Sans Serif" 
                             font.bold: isCurrent
@@ -568,29 +600,38 @@ PlasmoidItem {
                                 ColorAnimation { from: "red"; to: "yellow"; duration: 500 }
                             }
                         }
-                        Text {
-                            id: priceText
-                            text: modelData.price !== null
-                                ? (Number(modelData.price) + margin).toFixed(2) : "N/A"
-    
-                            font.family: "Sans Serif" 
-                            font.pixelSize: 16
-                            font.bold: isCurrent
-                            color: modelData.price !== null
-                                ? getColor(modelData.price)
-                                : "gray"
-                        }
-                        Text {
-                            text: " snt/kWh"
-                            anchors.baseline: priceText.baseline
-                            font.family: "Sans Serif" 
-                            font.pixelSize: 12
-                            font.bold: isCurrent
-                            color: modelData.price !== null
-                                ? getColor(modelData.price)
-                                : "gray"
-                        }
-                    } // Row
+                    
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignRight
+                            
+                            Text {
+                                id: priceText
+                                text: modelData.price !== null
+                                    ? (Number(modelData.price) + margin).toFixed(2).replace(".", ",") : "N/A"
+                                Layout.preferredWidth: 40
+                                horizontalAlignment: Text.AlignRight
+                                font.family: "Sans Serif" 
+                                font.pixelSize: 16
+                                font.bold: isCurrent
+                                color: modelData.price !== null
+                                    ? getColor(modelData.price)
+                                    : "gray"
+                            }
+                            Text {
+                                id: unitText
+                                text: " snt/kWh"
+                                // anchors.baseline: priceText.baseline
+                                horizontalAlignment: Text.AlignRight
+                                font.family: "Sans Serif" 
+                                font.pixelSize: 12
+                                font.bold: isCurrent
+                                color: modelData.price !== null
+                                    ? getColor(modelData.price)
+                                    : "gray"
+                            }
+                        } // RowLayout (hinta ja yksikkö)
+                    } // RowLayout
                     
                     ScrollBar.vertical: ScrollBar {
                         policy: ScrollBar.AsNeeded   // vaihtoehdot: AlwaysOn, AlwaysOff, AsNeeded
@@ -628,13 +669,13 @@ PlasmoidItem {
                         // var minPrice = Math.min(...prices.map(p => p.price || 0))
                         var minPrice = 0
                         var rawMax = Math.max(...prices.map(p => p.price || 0))
-                        var maxPrice = Math.max(25, rawMax + 3 + margin)
+                        var maxPrice = Math.max(7, rawMax + 3 + margin)
                         
                         if (minPrice === maxPrice) maxPrice += 1  // välttää nolladivision
 
                         // piirretään Y-akselin viivat ja numerot
                         ctx.fillStyle = "white"
-                        //ctx.font = "Sans Serif"
+                        //ctx.font = "10px sans-serif"
                         ctx.textAlign = "right"
                         ctx.textBaseline = "middle"
 
@@ -777,9 +818,9 @@ PlasmoidItem {
     }
 
     Component.onCompleted: {
-        dailyTimer.interval = getNextMidnightInterval()
-        dailyTimer.start()
-        hourlyTimer.start()
+        if (!plasmoid.configuration.lastFetchDate) {
+            plasmoid.configuration.lastFetchDate = "1970-01-01T00:00:00.000Z"
+        }
         fetchPrices();
         
     }
