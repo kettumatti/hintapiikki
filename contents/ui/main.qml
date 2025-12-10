@@ -17,6 +17,7 @@ PlasmoidItem {
     property var quarterlyPrices: []
     property var sortedQuarterlyPrices: []
     property var hourlyPrices: []
+    property var nextDay00: [] // Seuraavan päivän ensimmäisen tunnin hinnat
     property int currentHour: (new Date()).getHours()
     property int currentMinute: Math.floor((new Date()).getMinutes() / 15) * 15
     property bool popupIsOpen: false
@@ -141,7 +142,7 @@ PlasmoidItem {
             }
         }
 
-        // seuraava rajapiste + 1 sekunti
+        // seuraava päivitysaika + 1 sekunti
         let next = new Date(
             now.getFullYear(),
             now.getMonth(),
@@ -154,15 +155,27 @@ PlasmoidItem {
         return next.getTime() - now.getTime()
     }
 
-
+    // Antaa värikoodin hinnan perusteella
+    
     function getColor(price) {
         let lowThreshold = plasmoid.configuration.lowThreshold ?? 8;
         let highThreshold = plasmoid.configuration.highThreshold ?? 20;
 
-        if (price < lowThreshold - 1) return plasmoid.configuration.lowColor ?? "#7CFF4C";
-        else if (price < highThreshold - 1) return plasmoid.configuration.mediumColor ?? "#4CA6FF";
-        else return plasmoid.configuration.highColor ?? "#FF4C4C";
+//        const p = Math.round(price * 100) / 100
+        const p = parseFloat(price.toFixed(2))
+        
+        if (p <= lowThreshold) {
+            return plasmoid.configuration.lowColor ?? "#7CFF4C"
+        }
+        else if (p < highThreshold) {
+            return plasmoid.configuration.mediumColor ?? "#4CA6FF";
+        }
+        else {
+            return plasmoid.configuration.highColor ?? "#FF4C4C";
+        }
     }
+    
+    // Tarkistaa, onko hintadata tältä päivältä
     
     function dataIsFromToday() {
         const last = plasmoid.configuration.lastFetchDate;
@@ -177,6 +190,8 @@ PlasmoidItem {
             && lastDate.getDate() === now.getDate();
     }
 
+    // Näyttää hinnan ja hintatrendin pääikkunassa. Kutsuu tarvittaessa fetchPrice-funktiota,
+    // mikäli data on vanhentunutta tai seuraavan vuorokauden ensimmäisen tunnin hinnat puuttuvat.
   
     function showPrice() {
     
@@ -184,8 +199,14 @@ PlasmoidItem {
             fetchPrices();
             return;
         }
+        
+        // Jos ollaan klo 22 jälkeen ja huomisen klo 00–01 hinnat puuttuvat → hae
+        if (currentHour >= 22 && (!nextDay00 || nextDay00.length === 0)) {
+            fetchPrices()
+            return
+        }
 
-        // Varmista että data on olemassa
+        // Varmistetaan että data on olemassa
         if (!quarterlyPrices || !Array.isArray(quarterlyPrices)) quarterlyPrices = [];
         if (!hourlyPrices || !Array.isArray(hourlyPrices)) hourlyPrices = [];
 
@@ -193,7 +214,7 @@ PlasmoidItem {
         var h = now.getHours();   // numero 0–23
         var m = now.getMinutes(); // numero 0–59
 
-        // Erottele logiikka asetuksen mukaan
+        // Erottellaan logiikka asetuksen mukaan
         if (plasmoid.configuration.showQuarterly) {
             // --- Varttihinta ---
             var quarter = m < 15 ? 0 : m < 30 ? 15 : m < 45 ? 30 : 45; // numero
@@ -218,9 +239,14 @@ PlasmoidItem {
                 (item.hour === nextHour.toString().padStart(2, "0") && item.minute === nextMinute.toString().padStart(2, "0"))
             );
 
+            // Jos ollaan klo 23:45, käytetään huomisen klo 00:00–00:15 varttia nextDay00-taulukosta
+            if (!nextQ && h === 23 && quarter === 45 && nextDay00 && nextDay00.length > 0) {
+                nextQ = nextDay00[0];  // huomisen ensimmäinen vartti HUOM! Datan järjestys päivän lopusta alkuun.
+            }
+            
             priceTrend = (nextQ && price != null)
                 ? (nextQ.price > price ? "▲" : nextQ.price < price ? "▼" : " -")
-                : " -";
+                : " -"; 
 
         } else {
             // --- Tuntihinta ---
@@ -241,12 +267,19 @@ PlasmoidItem {
                 item.hour === nh || item.hour === nh.toString().padStart(2, "0")
             );
 
+            // Jos ollaan klo 23, käytetään huomisen klo 00–01 tuntihintaa nextDay00-taulukosta
+            if (!nextRow && h === 23 && nextDay00 && nextDay00.length === 4) {
+                const avg = nextDay00.reduce((a, b) => a + b.price, 0) / 4
+                nextRow = { hour: "00", price: avg }
+            }
+
             priceTrend = (nextRow && price != null)
                 ? (nextRow.price > price ? "▲" : nextRow.price < price ? "▼" : " -")
                 : " -";
         }
-
     }
+    
+    // Noutaa hintatiedot porssisahko.net -sivustolta
     
     function fetchPrices() {
         var xhr = new XMLHttpRequest()
@@ -273,6 +306,11 @@ PlasmoidItem {
                     allPrices = response.prices
 
                     const todayDateStr = new Date().toLocaleDateString("sv-SE")
+                    
+                    const today = new Date()
+                    const tomorrow = new Date(today)
+                    tomorrow.setDate(today.getDate() + 1)
+                    const tomorrowDateStr = tomorrow.toLocaleDateString("sv-SE")
 
                     const newQuarterly = allPrices
                         .filter(item => new Date(item.startDate).toLocaleDateString("sv-SE") === todayDateStr)
@@ -284,6 +322,34 @@ PlasmoidItem {
                                 price: item.price
                             }
                         })
+                        
+                    // Huomisen klo 00–01 vartit erikseen (UTC-pohjainen vertailu)
+                        
+                    const tomorrowQuarterly00 = []
+
+                    for (let i = 0; i < allPrices.length; i++) {
+                        const item = allPrices[i]
+                        const d = new Date(item.startDate)
+
+                        // Muunna Suomen ajaksi
+                        const localHour = d.getHours()
+                        const localDateStr = d.getDate().toString().padStart(2, "0") + "." +
+                                            (d.getMonth() + 1).toString().padStart(2, "0") + "." +
+                                            d.getFullYear()
+
+                        // Suodatetaan vain huomisen 00:00–00:59
+                        if (localDateStr === tomorrowDateStr && localHour === 0) {
+                            tomorrowQuarterly00.push({
+                                hour: localHour.toString().padStart(2, "0"),
+                                minute: d.getMinutes().toString().padStart(2, "0"),
+                                price: item.price
+                            })
+                        }
+                    }
+                    
+                    tomorrowQuarterly00.reverse() // Käännetään data kronologiseen järjestykseen 00:00->00:45
+        
+                    //////////
 
                     const hourlyMap = {}
                     newQuarterly.forEach(q => {
@@ -304,6 +370,9 @@ PlasmoidItem {
 
                     quarterlyPrices = newQuarterly
                     hourlyPrices = newHourly
+
+                    nextDay00 = tomorrowQuarterly00
+
                     plasmoid.configuration.lastFetchDate = new Date().toISOString()
 
                     showPrice();
@@ -341,19 +410,19 @@ PlasmoidItem {
         var popupHeight = pricePopup.height;
 
         // Appletti vasen yläkulma globaalisti
-        var appletPos = root.mapToGlobal(Qt.point(0,0));
+        var appletPos = root.mapToGlobal(Qt.point(0, 0));
 
-        // Aluksi popup alkaa normaalisti applettiin nähden
-        var x = 0;
-        var y = 0;
+        // Popupin oletus koordinaatit appletin vasempaan yläkulmaan nähden
+        var x = 0 // -100;
+        var y = 0 // -70;
 
-        // Jos popup ylittää ruudun oikean reunan, siirrä negatiiviseksi
+        // Jos popup ylittää ruudun oikean reunan, siirrä vasemmalle
         var overflowX = (appletPos.x + popupWidth) - (Screen.width - 60)
         if (overflowX > 0) {
             x = -overflowX;
         }
 
-        // Jos popup ylittää ruudun alareunan, siirrä negatiiviseksi
+        // Jos popup ylittää ruudun alareunan, siirrä ylöspäin
         var overflowY = (appletPos.y + popupHeight) - (Screen.height - 60)
         if (overflowY > 0) {
             y = -overflowY
@@ -368,7 +437,7 @@ PlasmoidItem {
     /////////////////////////////////////////////////////////////////////////////
     ///////////////////////////////// PÄÄNÄKYMÄ /////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////
-
+        
     Rectangle {
         anchors.fill: parent
         color: plasmoid.configuration.bgColor ?? "#1E1E1E"
@@ -378,9 +447,10 @@ PlasmoidItem {
     Column {
         anchors.centerIn: parent
         spacing: 4
-
+        
         Text {
-            text: "Sähkön hinta"
+            id: otsikkoText
+            text: plasmoid.configuration.quarterlyPrices ? "Sähkön varttihinta" : "Sähkön tuntihinta"
             font.family: "Helvetica"
             font.bold: false
             font.pixelSize: root.height * 0.2
@@ -388,7 +458,7 @@ PlasmoidItem {
             horizontalAlignment: Text.AlignHCenter
             anchors.horizontalCenter: parent.horizontalCenter
         }
-
+        
         Row {
             spacing: 5
 
@@ -417,8 +487,7 @@ PlasmoidItem {
             }
         }
     }
-
-
+    
     ///////////////////////////////////////////////////////////////////////
     ////////////////////////////////// POPUP //////////////////////////////
     ///////////////////////////////////////////////////////////////////////
@@ -430,6 +499,8 @@ PlasmoidItem {
         modal: false
         focus: true      
         z: 1
+        
+        closePolicy: Popup.NoAutoClose
         
         property int popupX: 0
         property int popupY: 0
@@ -445,8 +516,7 @@ PlasmoidItem {
             if (root.x + width > Screen.width) {
                 popupX = Screen.width - width - 50
             }
-
-        }        
+        }     
         
         MouseArea {
             id: popupMouse
@@ -472,7 +542,6 @@ PlasmoidItem {
                     }
                 })
             }
-            
         }
      
         background: Rectangle {
@@ -480,8 +549,6 @@ PlasmoidItem {
             radius: 8
             border.color: root.plasmoid ? root.plasmoid.configuration.headerColor ?? "#FFD966" : "#FFD966"
             opacity: root.plasmoid ? root.plasmoid.configuration.bgOpacity ?? 0.95 : 0.95
-            
-            
         }
         
         ColumnLayout { 
@@ -489,7 +556,6 @@ PlasmoidItem {
             spacing: 8
             z: 2
             RowLayout {
-                //anchors.fill: parent
                 Layout.fillWidth: true
                 spacing: 8
 
@@ -515,7 +581,7 @@ PlasmoidItem {
                     checked: root.plasmoid.configuration.showQuarterly || false
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 
-                    // korvataan oletus-indikaattori
+                    // korvataan oletus-"vipu"
                     indicator: Rectangle {
                         id: track
                         width: 60
@@ -541,6 +607,7 @@ PlasmoidItem {
                     onToggled: {
                         closeTimer.stop()
                         root.plasmoid.configuration.showQuarterly = checked
+                        
                         Qt.callLater(function() {
                             let idx = pricePopup.findCurrentIndex()
                             if (idx >= 0) {
@@ -548,6 +615,7 @@ PlasmoidItem {
                             }
                             priceGraph.requestPaint()
                         })
+                        
                         showPrice()
                     }
                 }
@@ -615,7 +683,7 @@ PlasmoidItem {
                                 font.pixelSize: 16
                                 font.bold: isCurrent
                                 color: modelData.price !== null
-                                    ? getColor(modelData.price)
+                                    ? getColor(modelData.price + margin)
                                     : "gray"
                             }
                             Text {
@@ -627,14 +695,14 @@ PlasmoidItem {
                                 font.pixelSize: 12
                                 font.bold: isCurrent
                                 color: modelData.price !== null
-                                    ? getColor(modelData.price)
+                                    ? getColor(modelData.price + margin)
                                     : "gray"
                             }
                         } // RowLayout (hinta ja yksikkö)
                     } // RowLayout
                     
                     ScrollBar.vertical: ScrollBar {
-                        policy: ScrollBar.AsNeeded   // vaihtoehdot: AlwaysOn, AlwaysOff, AsNeeded
+                        policy: ScrollBar.AsNeeded
                         interactive: false
                         width: 1
                     }
@@ -667,34 +735,47 @@ PlasmoidItem {
                         if (prices.length === 0) return
 
                         // laske min ja max hintatasot
-                        // var minPrice = Math.min(...prices.map(p => p.price || 0))
-                        var minPrice = 0
+                        var rawMin = Math.min(...prices.map(p => p.price ?? 0))
+                        var minPrice = Math.min(-0.2, rawMin - 1)
                         var rawMax = Math.max(...prices.map(p => p.price || 0))
-                        var maxPrice = Math.max(7, rawMax + 3 + margin)
+                        var maxPrice = Math.max(7, rawMax + 2 + margin)
                         
-                        if (minPrice === maxPrice) maxPrice += 1  // välttää nolladivision
-
+                        if (minPrice === maxPrice) maxPrice += 1  // estää nollalla jakamisen
+                            
                         // piirretään Y-akselin viivat ja numerot
                         ctx.fillStyle = "white"
                         //ctx.font = "10px sans-serif"
                         ctx.textAlign = "right"
                         ctx.textBaseline = "middle"
 
-                        for (var yValue = 0; yValue <= maxPrice; yValue += 5) {
-                            var yPos = height - (yValue / maxPrice) * height
-                            
-                            // piirrä numero vain jos ei ole nolla
-                            if (yValue !== 0) {
-                                ctx.fillText(yValue.toString(), 30, yPos)
-                            }
+                        // Pyöristetään rajat 2:n välein
+                        const step = 2
+                        const minRounded = Math.floor(minPrice / step) * step
+                        const maxRounded = Math.ceil(maxPrice / step) * step
+
+                        for (var yValue = minRounded; yValue <= maxRounded; yValue += step) {
+                            var yPos = height - ((yValue - minPrice) / (maxPrice - minPrice)) * height
+
+                            ctx.fillText(yValue.toString(), 30, yPos)
+
                             // viiva akselille
                             ctx.strokeStyle = "rgba(255,255,255,0.2)"
                             ctx.beginPath()
                             ctx.moveTo(32, yPos)
                             ctx.lineTo(width, yPos)
+                            
+                            if (yValue === 0) {
+                                // Nollaviiva paksumpana ja kirkkaampana
+                                ctx.strokeStyle = "rgba(255,255,255,0.7)"
+                                ctx.lineWidth = 2
+                            } else {
+                                ctx.strokeStyle = "rgba(255,255,255,0.2)"
+                                ctx.lineWidth = 1
+                            }
+                            
                             ctx.stroke()
                         }
-                        
+                       
                         var axisOffset = 40; // tilaa Y-akselin numeroille
                         
                         var barCount = prices.length
@@ -707,20 +788,28 @@ PlasmoidItem {
 
                         for (var i = 0; i < barCount; i++) {
                             var item = prices[i]
-                            var p = item.price || 0
-                            var barHeight = ((p + margin) / (maxPrice - minPrice)) * height
+                            var p = (item.price ?? 0) + margin
+                            var valueY = height - ((p - minPrice) / (maxPrice - minPrice)) * height
+                            var zeroY = height - ((0 - minPrice) / (maxPrice - minPrice)) * height
+                            
+                            var barHeight = ((p - minPrice) / (maxPrice - minPrice)) * height
+
                             var x = axisOffset + i * barWidth
                             var y = height - barHeight
-                            
+
                             // tarkista, onko kyseessä nykyinen pylväs
                             var isCurrent = root.plasmoid.configuration.showQuarterly
                                 ? (Number(item.hour) === currentHour && Number(item.minute) === currentQuarter)
                                 : (Number(item.hour) === currentHour)
 
                             // väri hintatason mukaan
-                            if (p < (root.plasmoid.configuration.lowThreshold ?? 8)) ctx.fillStyle = "#7CFF4C"
-                            else if (p < (root.plasmoid.configuration.highThreshold ?? 20)) ctx.fillStyle = "#4CA6FF"
-                            else ctx.fillStyle = "#FF4C4C"
+                            //for (let p of prices) {
+                            //    ctx.fillStyle = getColor(p);
+                            //    // ctx.fillRect(...);
+                            //}
+                            if (p < (root.plasmoid.configuration.lowThreshold ?? 8)) ctx.fillStyle = getColor(p) //"#7CFF4C"
+                            else if (p < (root.plasmoid.configuration.highThreshold ?? 20)) ctx.fillStyle = getColor(p) //"#4CA6FF"
+                            else ctx.fillStyle = getColor(p) // "#FF4C4C"
 
                             // jos nykyinen, hehkuu valkoisena
                             if (isCurrent) {
@@ -737,8 +826,17 @@ PlasmoidItem {
                                 ctx.closePath()
                                 ctx.fill()
                             }
-
-                            ctx.fillRect(x, y, barWidth * 0.8, barHeight) // jätetään pieni rako
+                            
+                            // Pylvään piirto
+                            if (p >= 0) {
+                                // positiivinen → nollasta ylöspäin
+                                var barHeight = zeroY - valueY
+                                ctx.fillRect(x, valueY, barWidth * 0.8, barHeight)
+                            } else {
+                                // negatiivinen → nollasta alaspäin
+                                var barHeight = valueY - zeroY
+                                ctx.fillRect(x, zeroY, barWidth * 0.8, barHeight)
+                            }
                             
                         }
                     }  // onPaint
@@ -818,6 +916,17 @@ PlasmoidItem {
         onEntered: closeTimer.stop()
     }
 
+    // Päivitä hinta ja otsikko, kun asetusikkuna suljetaan
+    Connections {
+        target: plasmoid.configuration
+        function onShowQuarterlyChanged() {
+            otsikkoText.text = plasmoid.configuration.showQuarterly
+                           ? "Sähkön varttihinta"
+                           : "Sähkön tuntihinta"
+            showPrice()
+        }
+    }
+   
     Component.onCompleted: {
         if (!plasmoid.configuration.lastFetchDate) {
             plasmoid.configuration.lastFetchDate = "1970-01-01T00:00:00.000Z"
