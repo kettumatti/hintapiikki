@@ -195,7 +195,7 @@ KCM.SimpleKCM {
         Switch {
             id: showQuarterly
             Kirigami.FormData.label: qsTr("15 min hintatiedot")
-            checked: getConfigValue("showQuarterly", false) ?? false
+            checked: plasmoid.configuration.showQuarterly
             onToggled: plasmoid.configuration.showQuarterly = checked
         }
         
