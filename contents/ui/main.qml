@@ -392,6 +392,8 @@ PlasmoidItem {
         xhr.send()
     }
 
+    // Järjestelee 15 min hinnat kronologiseen järjestykseen
+    
     function updateSortedQuarterlies() {
         let arr = root.quarterlyPrices.slice();  // kopio
         arr.sort((a, b) => {
@@ -403,6 +405,8 @@ PlasmoidItem {
         root.sortedQuarterlyPrices = arr;
     }
 
+    // Säätää popupin paikkaa, mikäli appletti ruudun reunassa
+    
     function positionPopup() {
         if (!pricePopup) return
 
@@ -413,9 +417,19 @@ PlasmoidItem {
         var appletPos = root.mapToGlobal(Qt.point(0, 0));
 
         // Popupin oletus koordinaatit appletin vasempaan yläkulmaan nähden
-        var x = 0 // -100;
-        var y = 0 // -70;
+        var x = -100;
+        var y = -70;
 
+        // Jos applet on lähellä vasenta reunaa, älä siirrä popupia vasemmalle
+        if (appletPos.x < 100) {
+            x = 0;
+        }
+
+        // Jos applet on lähellä yläreunaa, älä siirrä popupia ylöspäin
+        if (appletPos.y < 70) {
+            y = 0;
+        }
+        
         // Jos popup ylittää ruudun oikean reunan, siirrä vasemmalle
         var overflowX = (appletPos.x + popupWidth) - (Screen.width - 60)
         if (overflowX > 0) {
@@ -451,7 +465,7 @@ PlasmoidItem {
         Text {
             id: otsikkoText
             text: plasmoid.configuration.quarterlyPrices ? "Sähkön varttihinta" : "Sähkön tuntihinta"
-            font.family: "Helvetica"
+            font.family: "Sans Serif"
             font.bold: false
             font.pixelSize: root.height * 0.2
             color: plasmoid.configuration.headerColor ?? "#FFD966"
