@@ -48,3 +48,12 @@ Hinta/hinnat näytetään joko **tunneittain** tai **varteittain (15 min)**.
 
 ## 📊 Data
 Appletti noutaa sähkön hinnat [porssisahko.net](https://porssisahko.net) API:sta.  
+
+---
+
+## English summary
+
+Hintapiikki is a KDE Plasma 6 desktop applet that displays real-time electricity spot prices in Finland. It retrieves data from porssisahko.net and shows the current, hourly, or 15-minute prices with color-coded indicators. The popup view includes a full-day price graph for quick visual inspection. 
+
+This widget is designed to provide an at-a-glance overview of electricity costs directly on the desktop.
+
