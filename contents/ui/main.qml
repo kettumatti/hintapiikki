@@ -36,7 +36,7 @@ PlasmoidItem {
     
     Timer {
         id: wakeChecker
-        interval: 20000     // tarkistetaan 20s välein
+        interval: 10000     // tarkistetaan 10s välein
         running: true
         repeat: true
 
@@ -200,8 +200,8 @@ PlasmoidItem {
             return;
         }
         
-        // Jos ollaan klo 22 jälkeen ja huomisen klo 00–01 hinnat puuttuvat → hae
-        if (currentHour >= 22 && (!nextDay00 || nextDay00.length === 0)) {
+        // Jos ollaan klo 23 jälkeen ja huomisen klo 00–01 hinnat puuttuvat → hae
+        if (currentHour >= 23 && (!nextDay00 || nextDay00.length === 0)) {
             fetchPrices()
             return
         }
@@ -267,8 +267,8 @@ PlasmoidItem {
                 item.hour === nh || item.hour === nh.toString().padStart(2, "0")
             );
 
-            // Jos ollaan klo 23, käytetään huomisen klo 00–01 tuntihintaa nextDay00-taulukosta
-            if (!nextRow && h === 23 && nextDay00 && nextDay00.length === 4) {
+            // Jos ollaan klo 22, käytetään huomisen klo 00–01 tuntihintaa nextDay00-taulukosta
+            if (!nextRow && h === 22 && nextDay00 && nextDay00.length === 4) {
                 const avg = nextDay00.reduce((a, b) => a + b.price, 0) / 4
                 nextRow = { hour: "00", price: avg }
             }
@@ -333,10 +333,9 @@ PlasmoidItem {
 
                         // Muunna Suomen ajaksi
                         const localHour = d.getHours()
-                        const localDateStr = d.getDate().toString().padStart(2, "0") + "." +
-                                            (d.getMonth() + 1).toString().padStart(2, "0") + "." +
-                                            d.getFullYear()
+                        const localDateStr = d.toLocaleDateString("sv-SE")
 
+                        
                         // Suodatetaan vain huomisen 00:00–00:59
                         if (localDateStr === tomorrowDateStr && localHour === 0) {
                             tomorrowQuarterly00.push({
