@@ -267,8 +267,8 @@ PlasmoidItem {
                 item.hour === nh || item.hour === nh.toString().padStart(2, "0")
             );
 
-            // Jos ollaan klo 22, käytetään huomisen klo 00–01 tuntihintaa nextDay00-taulukosta
-            if (!nextRow && h === 22 && nextDay00 && nextDay00.length === 4) {
+            // Jos ollaan klo 23, käytetään huomisen klo 00–01 tuntihintaa nextDay00-taulukosta
+            if (!nextRow && h === 23 && nextDay00 && nextDay00.length === 4) {
                 const avg = nextDay00.reduce((a, b) => a + b.price, 0) / 4
                 nextRow = { hour: "00", price: avg }
             }
