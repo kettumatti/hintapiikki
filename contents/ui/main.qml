@@ -77,7 +77,7 @@ PlasmoidItem {
   
     Timer {
         id: retryTimer
-        interval: 30 * 1000
+        interval: 10 * 1000 // 10 sekuntia
         repeat: false
         running: false
         onTriggered: fetchPrices()
@@ -120,7 +120,7 @@ PlasmoidItem {
     // Uudelleenyritys datan hakemiseksi, jos esim. verkkoa ei ole.
     
     function retrySoon() {
-        console.log("Verkkovirhe tai timeout – yritetään uudelleen 30 sekunnin päästä");
+        console.warn("[com.github.kettumatti.hintapiikki] Verkkovirhe tai timeout – yritetään hetken kuluttua uudelleen ");
         retryTimer.restart()
     }
    
@@ -226,7 +226,7 @@ PlasmoidItem {
             );
 
             if (!q) {
-                console.warn("showPrice: Ei varttiriviä tunnille", h, ":", quarter, "— tarkista datan tyypit ja päiväsuodatus");
+                console.warn("[com.github.kettumatti.hintapiikki] Ei varttiriviä tunnille", h, ":", quarter, "— tarkista datan tyypit ja päiväsuodatus");
             }
 
             price = q && typeof q.price === "number" ? q.price : null;
@@ -255,8 +255,8 @@ PlasmoidItem {
             );
 
             if (!row) {
-                console.log("hourlyPrices:", JSON.stringify(hourlyPrices, null, 2));
-                console.warn("showPrice: Ei tuntiriviä tunnille", h, "— tarkista datan tyypit ja päiväsuodatus");
+                // console.log("[com.github.kettumatti.hintapiikki] ", JSON.stringify(hourlyPrices, null, 2));
+                console.warn("[com.github.kettumatti.hintapiikki] Ei tuntiriviä tunnille", h, "— tarkista datan tyypit ja päiväsuodatus");
             }
 
             price = row && typeof row.price === "number" ? row.price : null;
@@ -288,7 +288,7 @@ PlasmoidItem {
             if (xhr.readyState === XMLHttpRequest.DONE) {
                 // Tarkista HTTP-status
                 if (xhr.status !== 200) {
-                    console.warn("fetchPrices: HTTP virhe:", xhr.status)
+                    console.warn("[com.github.kettumatti.hintapiikki] HTTP virhe:", xhr.status)
                     retrySoon()
                     return  
                 }
@@ -298,7 +298,7 @@ PlasmoidItem {
                     
                     // Uusien tietojen validointi
                     if (!response.prices || !Array.isArray(response.prices)) {
-                        console.warn("fetchPrices: Datamuoto virheellinen")
+                        console.warn("[com.github.kettumatti.hintapiikki] Datamuoto virheellinen")
                         retrySoon()
                         return
                     }
@@ -362,7 +362,7 @@ PlasmoidItem {
                             const avg = prices.reduce((a, b) => a + b, 0) / prices.length
                             return { hour, price: avg }
                         } else {
-                            console.warn("Tunnilta puuttuu vartteja:", hour)
+                            console.warn("[com.github.kettumatti.hintapiikki] Tunnilta puuttuu vartteja:", hour)
                             return { hour, price: null }
                         }
                     }).sort((a, b) => parseInt(a.hour) - parseInt(b.hour))
@@ -377,7 +377,7 @@ PlasmoidItem {
                     showPrice();
 
                 } catch (e) {
-                    console.log("JSON-virhe:", e)
+                    console.warn("[com.github.kettumatti.hintapiikki] JSON-virhe:", e)
                     hourlyPrices = []
                 }
             }
