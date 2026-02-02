@@ -761,8 +761,11 @@ PlasmoidItem {
                         ctx.textAlign = "right"
                         ctx.textBaseline = "middle"
 
-                        // Pyöristetään rajat 2:n välein
-                        const step = 2
+                        // Hintatasot sopivin välein (riippuen päivän korkeimmasta hinnasta)
+                        const rawStep = maxPrice / 10;
+                        const scaleBase = Math.pow(10, Math.floor(Math.log10(rawStep)));
+                        const step = [1, 2, 5, 10].find(n => n * scaleBase >= rawStep) * scaleBase;
+                        
                         const minRounded = Math.floor(minPrice / step) * step
                         const maxRounded = Math.ceil(maxPrice / step) * step
 
